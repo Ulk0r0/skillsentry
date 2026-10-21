@@ -1,12 +1,16 @@
 import type { Rule } from './rule.js';
 import { AST, LLM, MCP } from '../mapping.js';
-import { evidenceFor, squash } from '../util/text.js';
+import { evidenceFor, firstMatch, matches, squash } from '../util/text.js';
 
 /**
  * SS-005 — Obfuscated payloads and hidden channels: base64/hex blobs,
  * zero-width characters used to smuggle instructions past human review,
  * hidden HTML comments and "decode and execute" directives.
  */
+// Each code point in this class is an invisible formatting character on its
+// own (joiners, direction marks, soft hyphen, BOM) — not part of a composed
+// sequence, so the "misleading character class" heuristic is a false positive.
+// eslint-disable-next-line no-misleading-character-class
 const ZERO_WIDTH = /[\u200B\u200C\u200D\u200E\u200F\u2060-\u2064\u206A-\u206F\uFEFF\u00AD]/g;
 
 const BASE64_BLOB = /\b[A-Za-z0-9+/]{80,}={0,2}\b/g;
@@ -35,6 +39,10 @@ export const obfuscation: Rule = {
   run(surface) {
     const out: Array<{ evidence: string; note?: string; severity?: 'critical' | 'high' | 'medium'; score?: number }> = [];
     const text = surface.text;
+    // Spans already reported, so overlapping blob patterns (a run of hex
+    // characters is valid base64 too) yield one finding instead of two.
+    const reportedSpans: Array<{ start: number; end: number }> = [];
+    const overlaps = (start: number, end: number) => reportedSpans.some((s) => start < s.end && end > s.start);
 
     const zw = text.match(ZERO_WIDTH);
     if (zw && zw.length >= 3) {
@@ -46,8 +54,7 @@ export const obfuscation: Rule = {
       });
     }
 
-    const dec = DECODE_DIRECTIVE.exec(text);
-    DECODE_DIRECTIVE.lastIndex = 0;
+    const dec = firstMatch(DECODE_DIRECTIVE, text);
     if (dec) {
       out.push({
         evidence: evidenceFor(text, dec[0]),
@@ -58,11 +65,11 @@ export const obfuscation: Rule = {
     }
 
     for (const re of [BASE64_BLOB, HEX_BLOB] as const) {
-      const m = re.exec(text);
-      re.lastIndex = 0;
-      if (m) {
-        const nearDirective = DECODE_DIRECTIVE.test(text) || /\b(?:decode|execute|run|payload)\b/i.test(
-          text.slice(Math.max(0, (m.index ?? 0) - 80), (m.index ?? 0) + m[0].length + 80)
+      const m = firstMatch(re, text);
+      if (m && m.index !== undefined && !overlaps(m.index, m.index + m[0].length)) {
+        reportedSpans.push({ start: m.index, end: m.index + m[0].length });
+        const nearDirective = matches(DECODE_DIRECTIVE, text) || /\b(?:decode|execute|run|payload)\b/i.test(
+          text.slice(Math.max(0, m.index - 80), m.index + m[0].length + 80)
         );
         out.push({
           evidence: `${m[0].slice(0, 48)}… (${m[0].length} chars)`,
@@ -76,7 +83,7 @@ export const obfuscation: Rule = {
     }
 
     for (const cm of text.matchAll(HIDDEN_COMMENT)) {
-      if (DIRECTIVE_WORDS.test(cm[0])) {
+      if (matches(DIRECTIVE_WORDS, cm[0])) {
         out.push({
           evidence: squash(cm[0]).slice(0, 160),
           note: 'HTML comment containing directive-like wording — invisible to users, visible to the model',

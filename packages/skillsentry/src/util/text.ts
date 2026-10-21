@@ -8,10 +8,19 @@ import type { Severity } from '../types.js';
 
 // ---------------------------------------------------------------- ANSI ----
 
-const enabled = process.env.NO_COLOR == null;
+/**
+ * Color support is resolved at render time, not at import time: the CLI's
+ * `--no-color` flag mutates `process.env.NO_COLOR` after modules load, and
+ * capturing the value here would silently break the flag.
+ */
+function colorEnabled(): boolean {
+  return process.env.NO_COLOR == null;
+}
 
 function wrap(open: string, close: string) {
-  return (s: string) => (enabled ? `\u001B[${open}m${s}\u001B[0m` : s);
+  // Per-attribute reset (e.g. bold ends with 22, not the blanket 0) — valid
+  // ANSI and survives nested styling.
+  return (s: string) => (colorEnabled() ? `\u001B[${open}m${s}\u001B[${close}m` : s);
 }
 
 export const ansi = {
@@ -67,28 +76,53 @@ export interface Frontmatter {
  * Deliberately minimal: scalar values and flat lists. Unknown shapes fall
  * back to raw strings — parsing must never crash a scan.
  */
-export function parseFrontmatter(raw: string): Frontmatter {
+export function parseFrontmatter(input: string): Frontmatter {
+  // Strip a UTF-8 BOM so files saved by Windows editors still get their
+  // frontmatter recognized.
+  const raw = input.charCodeAt(0) === 0xfeff ? input.slice(1) : input;
   const m = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/.exec(raw);
-  if (!m) return { data: {}, body: raw, raw };
-  const [, fm, body] = m;
+  if (!m || m[1] === undefined || m[2] === undefined) return { data: {}, body: raw, raw };
+  const fm = m[1];
+  const body = m[2];
   const data: Record<string, string | string[]> = {};
   let currentKey: string | null = null;
+  let blockOpener: string | null = null; // '|' or '>' block scalar in progress
   for (const line of fm.split(/\r?\n/)) {
     if (!line.trim() || line.trim().startsWith('#')) continue;
+
+    // Continuation of a YAML block scalar (| or >): any line indented deeper
+    // than the key keeps feeding the value, verbatim for | and folded for >.
+    if (blockOpener && currentKey && /^\s+\S/.test(line)) {
+      const prev = data[currentKey];
+      const isFirstLine = typeof prev === 'string' && /^(?:\|-?|>-?)$/.test(prev);
+      data[currentKey] = isFirstLine ? line.trim() : `${typeof prev === 'string' ? prev : ''} ${line.trim()}`.trim();
+      continue;
+    }
+    blockOpener = null;
+
     const listItem = /^\s+-\s*(.+)$/.exec(line);
-    if (listItem && currentKey) {
+    if (listItem && currentKey && listItem[1] !== undefined) {
       const arr = Array.isArray(data[currentKey]) ? (data[currentKey] as string[]) : [];
       arr.push(stripQuotes(listItem[1].trim()));
       data[currentKey] = arr;
       continue;
     }
     const kv = /^([A-Za-z0-9_-]+)\s*:\s*(.*)$/.exec(line);
-    if (kv) {
+    if (kv && kv[1] !== undefined) {
       currentKey = kv[1];
-      const value = kv[2].trim();
+      const value = (kv[2] ?? '').trim();
       if (value === '') continue; // possibly a list follows
+      if (value === '|' || value === '|-' || value === '>' || value === '>-') {
+        blockOpener = value[0] ?? null; // multi-line value; collect indented lines below
+        data[currentKey] = value;
+        continue;
+      }
       data[currentKey] = stripQuotes(value);
     }
+  }
+  // A block scalar that collected nothing must not stay as a literal "|".
+  for (const [k, v] of Object.entries(data)) {
+    if (v === '|' || v === '|-' || v === '>' || v === '>-') data[k] = '';
   }
   return { data, body, raw };
 }
@@ -106,4 +140,31 @@ function stripQuotes(s: string): string {
  */
 export function rx(pattern: string, flags = 'i'): RegExp {
   return new RegExp(pattern, flags);
+}
+
+// ---------------------------------------------------------- regex state ----
+
+/**
+ * Module-level regexes are shared across scans; stateful APIs (`exec`,
+ * `test` on a `/g` pattern) leak `lastIndex` between files and make results
+ * depend on scan order. Rules MUST go through this helper: it runs the
+ * pattern against a fresh clone, so the shared object is never mutated.
+ */
+export function firstMatch(re: RegExp, text: string): RegExpExecArray | null {
+  const local = new RegExp(re.source, re.flags);
+  return local.exec(text);
+}
+
+/** `firstMatch` for boolean checks — never mutates the shared pattern. */
+export function matches(re: RegExp, text: string): boolean {
+  return firstMatch(re, text) !== null;
+}
+
+/**
+ * Iterate all matches of a global pattern without touching its state.
+ * (`String.matchAll` already clones internally; this exists so call sites
+ * state the invariant explicitly and stay uniform.)
+ */
+export function allMatches(re: RegExp, text: string): RegExpMatchArray[] {
+  return [...text.matchAll(new RegExp(re.source, re.flags))];
 }

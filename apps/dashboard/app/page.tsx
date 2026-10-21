@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { ScanReport, Severity } from 'skillsentry';
+import type { ScanReport } from 'skillsentry';
 
 interface Sample {
   id: string;
@@ -112,7 +112,7 @@ export default function Home() {
               <input type="checkbox" checked={aiEnabled} onChange={(e) => setAiEnabled(e.target.checked)} />
               AI layer (local open-weight model)
             </label>
-            <button className="scan" onClick={scan} disabled={loading || !content.trim()}>
+            <button className="scan" onClick={() => { void scan(); }} disabled={loading || !content.trim()}>
               {loading ? 'Scanning…' : 'Scan'}
             </button>
           </div>

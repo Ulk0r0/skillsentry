@@ -1,6 +1,6 @@
 import type { Rule } from './rule.js';
 import { AST, MCP, LLM } from '../mapping.js';
-import { evidenceFor } from '../util/text.js';
+import { evidenceFor, firstMatch } from '../util/text.js';
 
 /**
  * SS-006 — Cross-tool shadowing / routing hijack. The skill or MCP entry
@@ -37,8 +37,7 @@ export const crossToolShadowing: Rule = {
     const out: Array<{ evidence: string; note?: string; severity?: 'high' | 'critical' | 'medium'; score?: number }> = [];
     const seen = new Set<string>();
     for (const p of OVERRIDE_PATTERNS) {
-      const m = p.re.exec(surface.text);
-      p.re.lastIndex = 0;
+      const m = firstMatch(p.re, surface.text);
       if (m && !seen.has(m[0])) {
         seen.add(m[0]);
         const targetsTrusted = TARGETED_TOOLS.test(m[0]) || TARGETED_TOOLS.test(surface.text);

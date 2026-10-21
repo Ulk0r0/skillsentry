@@ -1,4 +1,4 @@
-import type { Finding, ScanResult, Severity, Verdict } from './types.js';
+import type { ScanResult, Severity, Verdict } from './types.js';
 import { SEVERITY_ORDER, severityRank } from './types.js';
 import { ansi, severityColor, squash } from './util/text.js';
 

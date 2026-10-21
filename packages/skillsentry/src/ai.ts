@@ -1,5 +1,4 @@
 import type { AiAssessment, ScanTarget, ScanOptions, Severity, StandardRef } from './types.js';
-import { severityRank } from './types.js';
 
 /**
  * The open-weight semantic layer.
@@ -117,12 +116,12 @@ export function parseAssessment(raw: string, model: string): AiAssessment {
   return {
     provider: 'openai-compatible (local)',
     model,
-    intent: String(json.intent ?? 'unspecified').slice(0, 300),
+    intent: typeof json.intent === 'string' ? json.intent.slice(0, 300) : 'unspecified',
     manipulationTechniques: techniques,
-    dataFlows: String(json.dataFlows ?? 'unspecified').slice(0, 300),
+    dataFlows: typeof json.dataFlows === 'string' ? json.dataFlows.slice(0, 300) : 'unspecified',
     severity: sev,
     confidence,
-    rationale: String(json.rationale ?? '').slice(0, 600),
+    rationale: typeof json.rationale === 'string' ? json.rationale.slice(0, 600) : '',
     standards
   };
 }
@@ -161,10 +160,4 @@ function clampNum(v: unknown, min: number, max: number, fallback: number): numbe
   const n = typeof v === 'number' ? v : Number(v);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, n));
-}
-
-/** Severity proposed by the AI, gated so it can only match the static floor. */
-export function aiCanRaise(staticMaxSeverity: Severity | null, aiSeverity: Severity): boolean {
-  if (!staticMaxSeverity) return true;
-  return severityRank(aiSeverity) >= severityRank(staticMaxSeverity);
 }

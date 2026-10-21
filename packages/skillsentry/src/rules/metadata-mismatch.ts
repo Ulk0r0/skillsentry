@@ -1,6 +1,6 @@
 import type { Rule } from './rule.js';
 import { AST, LLM } from '../mapping.js';
-import { evidenceFor, squash } from '../util/text.js';
+import { evidenceFor, firstMatch, allMatches, squash } from '../util/text.js';
 
 /**
  * SS-009 — Metadata mismatch / deceptive self-description (skill-md only).
@@ -43,8 +43,7 @@ export const metadataMismatch: Rule = {
 
     for (const c of CLAIMS) {
       for (const s of all) {
-        const m = c.re.exec(s.text);
-        c.re.lastIndex = 0;
+        const m = firstMatch(c.re, s.text);
         if (!m) continue;
         const others = corpus.replace(s.text, ' ');
         const contradictions: string[] = [];
@@ -63,16 +62,11 @@ export const metadataMismatch: Rule = {
     }
 
     for (const s of all) {
-      let count = 0;
-      let first = '';
-      for (const m of s.text.matchAll(AUTHORITY)) {
-        count++;
-        if (!first) first = m[0];
-      }
-      if (count >= 1 && /^(frontmatter\.)/.test(s.loc)) {
+      const authorityHits = allMatches(AUTHORITY, s.text).map((m) => m[0] ?? '').filter(Boolean);
+      if (authorityHits.length >= 1 && /^(frontmatter\.)/.test(s.loc)) {
         out.push({
-          evidence: evidenceFor(s.text, first),
-          note: `Self-attested authority wording (${count}×) in metadata — unverifiable trust signal`,
+          evidence: evidenceFor(s.text, authorityHits[0] ?? ''),
+          note: `Self-attested authority wording (${authorityHits.length}×) in metadata — unverifiable trust signal`,
           severity: 'medium',
           score: 5
         });

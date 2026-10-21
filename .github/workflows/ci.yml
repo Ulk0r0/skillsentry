@@ -16,14 +16,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - name: Install
-        run: npm install --no-audit --no-fund
+      - name: Install (reproducible, from the lockfile)
+        run: npm ci --no-audit --no-fund
+      - name: Lint (zero warnings tolerated)
+        run: npm run lint
+      - name: Typecheck (strict, no unchecked index access)
+        run: npm run typecheck
       - name: Build core
         run: npm run build
       - name: Test (clean gallery must stay clean)
         run: npm test
-      - name: Self-scan (dogfooding, static-only)
-        run: node packages/skillsentry/dist/cli.js samples --no-ai --fail-on high
+      - name: Self-scan — clean fixtures must pass (exit 0)
+        run: node packages/skillsentry/dist/cli.js samples/skills/clean samples/mcp/clean --no-ai --fail-on medium
+      - name: Self-scan — poisoned fixtures must be caught (exit 1 expected)
+        run: '! node packages/skillsentry/dist/cli.js samples/skills/poisoned samples/mcp/evil --no-ai --fail-on high'
 
   dashboard-build:
     runs-on: ubuntu-latest
@@ -32,7 +38,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install
-        run: npm install --no-audit --no-fund
+      - name: Install (reproducible, from the lockfile)
+        run: npm ci --no-audit --no-fund
+      - name: Build core
+        run: npm run build
       - name: Build dashboard
         run: npm run build:dashboard

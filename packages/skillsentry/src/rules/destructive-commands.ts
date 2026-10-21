@@ -1,6 +1,6 @@
 import type { Rule } from './rule.js';
 import { AST, LLM, MCP } from '../mapping.js';
-import { evidenceFor } from '../util/text.js';
+import { evidenceFor, firstMatch } from '../util/text.js';
 
 /**
  * SS-004 — Destructive system commands referenced in agent-readable text or
@@ -39,8 +39,7 @@ export const destructiveCommands: Rule = {
     const out: Array<{ evidence: string; note?: string; severity?: 'critical' | 'high' | 'medium'; score?: number }> = [];
     const seen = new Set<string>();
     for (const p of PATTERNS) {
-      const m = p.re.exec(surface.text);
-      p.re.lastIndex = 0;
+      const m = firstMatch(p.re, surface.text);
       if (m && !seen.has(m[0])) {
         seen.add(m[0]);
         out.push({

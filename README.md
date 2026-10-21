@@ -17,6 +17,7 @@ SkillSentry is a scanner that treats agent-readable text as an attack surface:
 - **An open-weight semantic layer**: a local model (Ollama with Gemma by default, or any OpenAI-compatible runtime — llama.cpp, LM Studio, vLLM) reviews the *intent* of the text and catches what regexes miss. If no local runtime is running, the scan degrades gracefully to static-only. **Nothing ever leaves your machine.**
 - **Every finding is mapped** to [OWASP LLM Top 10 (2026)](https://genai.owasp.org/Top-10-2026/), [OWASP Agentic Skills Top 10](https://github.com/OWASP/www-project-agentic-skills-top-10) and the [OWASP MCP Top 10](https://github.com/OWASP-MCP-Governance-and-Risk-Project/docs), with severity, evidence and remediation.
 - **Zero runtime dependencies.** A security tool that ships 500 transitive deps would be ironic. SkillSentry ships none.
+- **Deterministic by construction — and by test.** The same input always produces the same findings, no matter what was scanned before it. A dedicated determinism suite scans adversarial targets in shuffled orders on every commit; if results ever drift, CI fails.
 
 ---
 
@@ -153,6 +154,17 @@ packages/skillsentry/     core engine + CLI (TypeScript, zero deps, vitest)
 samples/                  clean + deliberately poisoned fixtures (used by tests)
 apps/dashboard/           local Next.js UI around the same engine
 ```
+
+## Engineering notes
+
+- **Determinism is a tested property, not an aspiration.** `test/determinism.test.ts` scans the same adversarial targets alone and after other targets in the same process and requires identical findings — it exists because a shared-regex state bug (order-dependent false negatives in SS-005) was found and fixed in v0.2.0. Full story in [CHANGELOG.md](CHANGELOG.md).
+- **TypeScript refuses unchecked indexing** (`noUncheckedIndexedAccess`) and **ESLint runs type-checked at zero warnings** in CI — the lint gate exists because those tools caught real defects during development, not as decoration.
+- **The CI self-scan is two-sided**: clean fixtures must exit 0, poisoned fixtures must be caught (exit 1 expected and asserted). If a rule ever goes blind on a known pattern, CI fails.
+- **Secrets never re-print.** Findings that match credential patterns emit masked evidence (`sk-ant…<redacted 37 chars>`), so reports are safe to paste into issues and CI logs.
+
+## Provenance
+
+SkillSentry is an original project, written from scratch in October 2026 for Hacktoberfest and the DEV Challenge S4 ("build with open-source AI"). It has **no fork parent**: `git log` starts at the initial commit, and the only external references are published standards (OWASP LLM Top 10 2026, the agentskills.io skill spec, OWASP MCP guidance), which the rules cite — never copy. The demo GIF is captured by a committed Playwright script against the repo's own dashboard; every asset in this README is regenerable from source.
 
 ## Threat model notes
 

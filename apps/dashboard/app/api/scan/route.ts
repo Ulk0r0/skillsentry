@@ -15,6 +15,14 @@ export async function POST(req: Request) {
   if (!content.trim()) {
     return NextResponse.json({ error: 'content is empty' }, { status: 400 });
   }
+  // Bound the paste size: the dashboard is a local tool, not a free scanner API.
+  const MAX_CONTENT_CHARS = 400_000;
+  if (content.length > MAX_CONTENT_CHARS) {
+    return NextResponse.json(
+      { error: `content too large (${content.length} chars, max ${MAX_CONTENT_CHARS})` },
+      { status: 413 }
+    );
+  }
   const filename = typeof body.filename === 'string' && body.filename.trim() ? body.filename.trim() : 'SKILL.md';
 
   try {

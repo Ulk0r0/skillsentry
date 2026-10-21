@@ -1,6 +1,6 @@
 import type { Rule } from './rule.js';
 import { AST, LLM, MCP } from '../mapping.js';
-import { evidenceFor } from '../util/text.js';
+import { evidenceFor, firstMatch, allMatches } from '../util/text.js';
 
 /**
  * SS-008 — Insecure MCP server configuration. Applies only to MCP config
@@ -63,8 +63,7 @@ export const insecureMcpConfig: Rule = {
     const seen = new Set<string>();
 
     for (const p of PATTERNS) {
-      const m = p.re.exec(text);
-      p.re.lastIndex = 0;
+      const m = firstMatch(p.re, text);
       if (m && !seen.has(p.label)) {
         seen.add(p.label);
         out.push({
@@ -78,9 +77,8 @@ export const insecureMcpConfig: Rule = {
 
     // Unpinned / floating installs (rug-pull surface): inspect the package
     // token itself so a properly pinned `pkg@1.2.3` stays clean.
-    for (const m of text.matchAll(NPX_RE)) {
-      const token = m[1];
-      NPX_RE.lastIndex = 0;
+    for (const m of allMatches(NPX_RE, text)) {
+      const token = m[1] ?? '';
       if (seen.has('unpinned-install')) break;
       if (/@latest$/i.test(token)) {
         seen.add('unpinned-install');
@@ -108,8 +106,7 @@ export const insecureMcpConfig: Rule = {
 
     const isEnv = surface.location.endsWith('.env');
     for (const s of INLINE_SECRET) {
-      const m = s.re.exec(text);
-      s.re.lastIndex = 0;
+      const m = firstMatch(s.re, text);
       if (m && !seen.has(s.label)) {
         seen.add(s.label);
         out.push({
@@ -131,7 +128,7 @@ export const insecureMcpConfig: Rule = {
  */
 function maskSecret(match: string): string {
   const kv = /^([A-Za-z0-9_-]{2,64})(\s*[:=]\s*)(.+)$/s.exec(match);
-  if (kv) return `${kv[1]}${kv[2]}<redacted ${kv[3].length} chars>`;
+  if (kv && kv[1] && kv[2] && kv[3]) return `${kv[1]}${kv[2]}<redacted ${kv[3].length} chars>`;
   if (match.length <= 10) return '<redacted>';
   return `${match.slice(0, 6)}…<redacted ${match.length - 6} chars>`;
 }

@@ -1,6 +1,6 @@
 import type { Rule } from './rule.js';
 import { AST, LLM, MCP } from '../mapping.js';
-import { evidenceFor } from '../util/text.js';
+import { evidenceFor, firstMatch } from '../util/text.js';
 
 /**
  * SS-001 — Hidden or overriding instructions embedded in the surfaces an
@@ -34,8 +34,7 @@ export const hiddenInstructions: Rule = {
   run(surface) {
     const out = [] as Array<{ evidence: string; note?: string; severity?: 'critical' | 'high'; score?: number }>;
     for (const p of PATTERNS) {
-      const m = p.re.exec(surface.text);
-      p.re.lastIndex = 0;
+      const m = firstMatch(p.re, surface.text);
       if (m) {
         out.push({
           evidence: evidenceFor(surface.text, m[0]),

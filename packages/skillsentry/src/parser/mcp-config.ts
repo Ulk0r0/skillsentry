@@ -89,7 +89,7 @@ function asRecord(v: unknown): Record<string, unknown> | null {
 
 function looksLikeServers(json: Record<string, unknown>): boolean {
   return Object.values(json).some(
-    (v) => v && typeof v === 'object' && !Array.isArray(v) && ('command' in (v as object) || 'url' in (v as object) || 'args' in (v as object))
+    (v) => v && typeof v === 'object' && !Array.isArray(v) && ('command' in v || 'url' in v || 'args' in v)
   );
 }
 

@@ -65,3 +65,21 @@ describe('countBySeverity', () => {
     );
   });
 });
+
+describe('ANSI color handling', () => {
+  it('respects NO_COLOR evaluated at render time (the --no-color flag sets it late)', async () => {
+    const res = await mixedResult();
+    const prev = process.env.NO_COLOR;
+    try {
+      process.env.NO_COLOR = '1';
+      const plain = renderTerminal(res);
+      expect(plain).not.toContain('\u001B[');
+      delete process.env.NO_COLOR;
+      const colored = renderTerminal(res);
+      expect(colored).toContain('\u001B[');
+    } finally {
+      if (prev === undefined) delete process.env.NO_COLOR;
+      else process.env.NO_COLOR = prev;
+    }
+  });
+});

@@ -16,7 +16,9 @@ import { renderTerminal, renderMarkdown, renderJson, exitCodeFor } from './repor
 import { DEFAULT_AI_BASE_URL, DEFAULT_MODEL } from './ai.js';
 import type { Severity } from './types.js';
 import { SEVERITY_ORDER } from './types.js';
-import { writeSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { realpathSync, writeSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 interface CliArgs {
   paths: string[];
@@ -30,7 +32,20 @@ interface CliArgs {
   verbose: boolean;
 }
 
-const USAGE = `SkillSentry v0.1.0 — local-first security scanner for AI agent skills (SKILL.md)
+/** Usage error thrown by parseArgs; main() converts it to exit code 2. */
+export class CliError extends Error {}
+
+const VERSION = (() => {
+  try {
+    const req = createRequire(import.meta.url);
+    const pkg = req('../package.json') as { version?: string };
+    return pkg.version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+})();
+
+const USAGE = `SkillSentry v${VERSION} — local-first security scanner for AI agent skills (SKILL.md)
 and MCP server configs. Static rules + open-weight model review, zero dependencies.
 
 USAGE
@@ -57,7 +72,11 @@ EXAMPLES
   skillsentry . --no-ai                  # deterministic offline mode
 `;
 
-function parseArgs(argv: string[]): CliArgs {
+/**
+ * Exported (pure) for tests: argument parsing without side effects.
+ * Invalid usage throws `CliError` instead of writing/exiting.
+ */
+export function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     paths: [],
     json: false,
@@ -71,28 +90,36 @@ function parseArgs(argv: string[]): CliArgs {
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    if (a === undefined) continue;
     switch (a) {
       case '--json': args.json = true; break;
       case '--md': case '--markdown': args.md = true; break;
       case '--fail-on': {
         const v = argv[++i] ?? '';
         if (!SEVERITY_ORDER.includes(v as Severity)) {
-          fail(`--fail-on must be one of ${SEVERITY_ORDER.join('|')}`);
+          throw new CliError(`--fail-on must be one of ${SEVERITY_ORDER.join('|')}`);
         }
         args.failOn = v as Severity;
         break;
       }
       case '--no-ai': args.ai = false; break;
       case '--ai': args.ai = true; break;
-      case '--ollama-url': case '--ai-url': case '--openai-base-url': args.aiBaseUrl = argv[++i]; break;
-      case '--model': args.model = argv[++i]; break;
-      case '--ai-timeout': args.aiTimeoutMs = Number(argv[++i] ?? 20000); break;
+      case '--ollama-url': case '--ai-url': case '--openai-base-url': args.aiBaseUrl = argv[++i] ?? undefined; break;
+      case '--model': args.model = argv[++i] ?? undefined; break;
+      case '--ai-timeout': {
+        const n = Number(argv[++i] ?? 20000);
+        // A NaN/0/negative timeout would arm an AbortController that fires
+        // instantly, silently breaking the AI layer.
+        if (!Number.isFinite(n) || n <= 0) throw new CliError('--ai-timeout must be a positive number of milliseconds');
+        args.aiTimeoutMs = n;
+        break;
+      }
       case '--verbose': args.verbose = true; break;
       case '--no-color': process.env.NO_COLOR = '1'; break;
-      case '-h': case '--help': writeSync(1, USAGE); process.exit(0);
-      case '-V': case '--version': writeSync(1, 'skillsentry 0.1.0\n'); process.exit(0);
+      case '-h': case '--help': { writeSync(1, USAGE); process.exit(0); break; }
+      case '-V': case '--version': { writeSync(1, `skillsentry ${VERSION}\n`); process.exit(0); break; }
       default:
-        if (a.startsWith('--')) fail(`unknown option: ${a}\n\n${USAGE}`);
+        if (a.startsWith('--')) throw new CliError(`unknown option: ${a}`);
         args.paths.push(a);
     }
   }
@@ -106,7 +133,12 @@ function fail(msg: string): never {
 }
 
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
+  let args: CliArgs;
+  try {
+    args = parseArgs(process.argv.slice(2));
+  } catch (err) {
+    fail(err instanceof CliError ? `${err.message}\n\n${USAGE}` : `fatal: ${String(err)}`);
+  }
   const log = args.verbose ? (m: string) => process.stderr.write(`${m}\n`) : undefined;
 
   const result = await scanPaths(args.paths, {
@@ -131,7 +163,20 @@ async function main(): Promise<void> {
   process.exitCode = exitCodeFor(result, args.failOn);
 }
 
-main().catch((err) => {
-  process.stderr.write(`skillsentry: fatal: ${err instanceof Error ? err.stack : String(err)}\n`);
-  process.exit(2);
-});
+// Only auto-run when this file IS the process entry (direct `node cli.js` or
+// the installed bin). Importing the module (tests, library reuse) must have
+// zero side effects — previously importing cli.ts triggered a real scan.
+const isEntry = (() => {
+  try {
+    return process.argv[1] !== undefined && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href;
+  } catch {
+    return false;
+  }
+})();
+
+if (isEntry) {
+  main().catch((err) => {
+    process.stderr.write(`skillsentry: fatal: ${err instanceof Error ? err.stack : String(err)}\n`);
+    process.exit(2);
+  });
+}

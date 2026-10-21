@@ -17,6 +17,31 @@ describe('frontmatter parser', () => {
     expect(fm.body).toBe('no frontmatter here');
     expect(fm.data).toEqual({});
   });
+
+  it('joins YAML block scalars (| and >) into one description value', () => {
+    const fm = parseFrontmatter('---\nname: demo\ndescription: |\n  First line of the pitch.\n  Second line with ~/.ssh mention.\n---\nBody');
+    expect(fm.data.description).toBe('First line of the pitch. Second line with ~/.ssh mention.');
+    const folded = parseFrontmatter('---\ndescription: >-\n  Folded one.\n  Folded two.\n---\nBody');
+    expect(folded.data.description).toBe('Folded one. Folded two.');
+  });
+
+  it('an empty block scalar does not leak the "|" opener as content', () => {
+    const fm = parseFrontmatter('---\nname: x\ndescription: |\n---\nBody only');
+    expect(fm.data.description).toBe('');
+  });
+
+  it('strips a UTF-8 BOM so Windows-authored files parse their frontmatter', () => {
+    const fm = parseFrontmatter('\uFEFF---\nname: bommed\ndescription: Saved by a Windows editor\n---\nBody');
+    expect(fm.data.name).toBe('bommed');
+  });
+
+  it('handles CRLF line endings in frontmatter and body', () => {
+    const fm = parseFrontmatter('---\r\nname: crlf\ndescription: Windows line endings\r\ntags:\r\n  - one\r\n---\r\nBody line\r\n');
+    expect(fm.data.name).toBe('crlf');
+    expect(fm.data.description).toBe('Windows line endings');
+    expect(fm.data.tags).toEqual(['one']);
+    expect(fm.body.startsWith('Body line')).toBe(true);
+  });
 });
 
 describe('evidence extraction', () => {

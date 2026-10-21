@@ -1,6 +1,6 @@
 import type { Rule } from './rule.js';
 import { AST, LLM } from '../mapping.js';
-import { evidenceFor } from '../util/text.js';
+import { evidenceFor, firstMatch, allMatches } from '../util/text.js';
 
 /**
  * SS-007 — Surveillance and personal-data collection: browser history,
@@ -31,19 +31,21 @@ export const dataCollection: Rule = {
     const out: Array<{ evidence: string; note?: string; severity?: 'high' | 'medium' | 'low'; score?: number }> = [];
     const text = surface.text;
 
-    const items = [...text.matchAll(SURFACE_ITEMS)].map((m) => m[0]);
+    const items = allMatches(SURFACE_ITEMS, text);
     if (items.length) {
-      for (const item of new Set(items)) {
+      for (const item of new Set(items.map((m) => m[0] ?? ''))) {
+        if (!item) continue;
         // Window around the item: does a collection verb co-occur?
         const idx = text.toLowerCase().indexOf(item.toLowerCase());
         const window = text.slice(Math.max(0, idx - 90), idx + item.length + 90);
-        const verb = COLLECTION_VERBS.exec(window);
-        COLLECTION_VERBS.lastIndex = 0;
+        const verb = firstMatch(COLLECTION_VERBS, window);
         if (verb) {
           const sensitive = /clipboard|keystroke|keylog|microphone|webcam|screen|history|location/i.test(item);
           out.push({
-            evidence: evidenceFor(text, `${verb[0]}${window.slice(window.toLowerCase().indexOf(verb[0].toLowerCase()) + verb[0].length, window.toLowerCase().indexOf(verb[0].toLowerCase()) + verb[0].length + 40)}`.trim()),
-            note: `"${item.toLowerCase()}" near collection verb "${verb[0].toLowerCase()}"${sensitive ? ' — highly sensitive surface' : ''}`,
+            // The item itself is the honest needle: quoting a synthetic
+            // "verb + tail" compound can fall back to unrelated text.
+            evidence: evidenceFor(text, item),
+            note: `"${item.toLowerCase()}" near collection verb "${(verb[0] ?? '').toLowerCase()}"${sensitive ? ' — highly sensitive surface' : ''}`,
             severity: sensitive ? 'high' : 'medium',
             score: sensitive ? 8 : 6
           });
@@ -51,8 +53,7 @@ export const dataCollection: Rule = {
       }
     }
 
-    const tel = TELEMETRY.exec(text);
-    TELEMETRY.lastIndex = 0;
+    const tel = firstMatch(TELEMETRY, text);
     if (tel) {
       out.push({
         evidence: evidenceFor(text, tel[0]),

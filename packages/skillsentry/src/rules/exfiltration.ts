@@ -9,7 +9,7 @@ import { evidenceFor, squash } from '../util/text.js';
  */
 const EXFIL_HOSTS = /(?:webhook\.site|requestbin\.[a-z]+|pipedream\.net|pastebin\.com|hastebin|transfer\.sh|file\.io|ngrok\.(?:io|app|dev)|\.trycloudflare\.com|beeceptor\.com|postb\.in|interact\.sh|oast\.(?:pro|fun|live))/i;
 
-const URL_RE = /\bhttps?:\/\/[^\s"'<>()\[\]]{4,}/gi;
+const URL_RE = /\bhttps?:\/\/[^\s"'<>()[\]]{4,}/gi;
 
 const SEND_VERBS = /\b(send|post|upload|forward|report|transmit|deliver|exfiltrate|sync)\b/i;
 

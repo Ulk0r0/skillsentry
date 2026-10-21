@@ -110,7 +110,7 @@ export function runStaticRules(target: ScanTarget): Finding[] {
 export function aggregateRisk(findings: Finding[]): { riskScore: number; verdict: Verdict } {
   if (findings.length === 0) return { riskScore: 0, verdict: 'clean' };
   const scores = findings.map((f) => f.score).sort((a, b) => b - a);
-  const max = scores[0];
+  const max = scores[0] ?? 0;
   const breadth = Math.min(30, (scores.length - 1) * 4);
   const riskScore = Math.min(100, Math.round(max * 6.5 + breadth));
   const hasCritical = findings.some((f) => f.severity === 'critical');
@@ -162,8 +162,6 @@ export async function scanText(
 export async function scanPaths(inputs: string[], opts: ScanOptions = {}): Promise<ScanResult> {
   const skipped: string[] = [];
   const files = await collectFiles(inputs, skipped);
-  const started = Date.now();
-  void started;
 
   let aiAvailable = false;
   if (opts.ai !== false && files.length > 0) {

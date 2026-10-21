@@ -1,6 +1,6 @@
 import type { Rule } from './rule.js';
 import { AST, LLM } from '../mapping.js';
-import { evidenceFor } from '../util/text.js';
+import { evidenceFor, firstMatch, allMatches } from '../util/text.js';
 
 /**
  * SS-003 — Credential and secret access patterns. Path-shaped references to
@@ -35,8 +35,7 @@ export const credentialAccess: Rule = {
     const out: Array<{ evidence: string; note?: string; severity?: 'high' | 'low'; score?: number }> = [];
     const text = surface.text;
     for (const p of HIGH_CONF) {
-      const m = p.re.exec(text);
-      p.re.lastIndex = 0;
+      const m = firstMatch(p.re, text);
       if (m) {
         out.push({
           evidence: evidenceFor(text, m[0]),
@@ -47,8 +46,8 @@ export const credentialAccess: Rule = {
       }
     }
     // Generic wording: one informational finding max, to stay useful.
-    const generic = [...text.matchAll(GENERIC)];
-    if (generic.length >= 3) {
+    const generic = allMatches(GENERIC, text);
+    if (generic.length >= 3 && generic[0]) {
       out.push({
         evidence: evidenceFor(text, generic[0][0]),
         note: `Repeated secret-related wording (${generic.length} occurrences) — review what is actually accessed`,
