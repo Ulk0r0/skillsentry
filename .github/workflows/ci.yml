@@ -18,12 +18,15 @@ jobs:
           node-version: ${{ matrix.node }}
       - name: Install (reproducible, from the lockfile)
         run: npm ci --no-audit --no-fund
+      # Build must precede lint: the dashboard imports package types from
+      # skillsentry/dist, and type-aware ESLint rules cannot resolve them
+      # until the declaration files exist.
+      - name: Build core
+        run: npm run build
       - name: Lint (zero warnings tolerated)
         run: npm run lint
       - name: Typecheck (strict, no unchecked index access)
         run: npm run typecheck
-      - name: Build core
-        run: npm run build
       - name: Test (clean gallery must stay clean)
         run: npm test
       - name: Self-scan — clean fixtures must pass (exit 0)
