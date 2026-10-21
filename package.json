@@ -1,6 +1,6 @@
 {
   "name": "skillsentry-monorepo",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "SkillSentry — local-first security scanner for AI agent skills (SKILL.md) and MCP server configs, powered by open-weight models",
   "license": "MIT",
@@ -19,7 +19,9 @@
     "lint": "eslint . --max-warnings 0",
     "scan": "node packages/skillsentry/dist/cli.js",
     "dev:dashboard": "npm run build && npm run dev --workspace skillsentry-dashboard",
-    "build:dashboard": "npm run build && npm run build --workspace skillsentry-dashboard"
+    "build:dashboard": "npm run build && npm run build --workspace skillsentry-dashboard",
+    "bench": "npm run build && node packages/skillsentry/scripts/bench.mjs",
+    "test:coverage": "npm run test:coverage --workspace packages/skillsentry"
   },
   "devDependencies": {
     "eslint": "^9.39.5",

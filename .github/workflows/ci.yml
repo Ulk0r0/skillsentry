@@ -29,6 +29,8 @@ jobs:
         run: npm run typecheck
       - name: Test (clean gallery must stay clean)
         run: npm test
+      - name: Coverage (thresholds enforced)
+        run: npm run test:coverage
       - name: Self-scan — clean fixtures must pass (exit 0)
         run: node packages/skillsentry/dist/cli.js samples/skills/clean samples/mcp/clean --no-ai --fail-on medium
       - name: Self-scan — poisoned fixtures must be caught (exit 1 expected)

@@ -23,10 +23,17 @@ describe('aggregateRisk', () => {
     expect(r.riskScore).toBeGreaterThanOrEqual(60);
   });
 
-  it('stays clean for info-only findings', () => {
-    const f = { severity: 'low', score: 2.5 } as Finding;
+  it('stays clean for info-only findings (purely informational)', () => {
+    const f = { severity: 'info', score: 1 } as Finding;
     const r = aggregateRisk([f]);
     expect(r.verdict).toBe('clean');
+  });
+
+  it('low-only findings make the report suspicious — CLEAN cannot coexist with listed findings', () => {
+    const f = { severity: 'low', score: 2.5 } as Finding;
+    const r = aggregateRisk([f]);
+    expect(r.verdict).toBe('suspicious');
+    expect(r.riskScore).toBeLessThan(30); // risk stays calibrated, only the badge is honest now
   });
 
   it('marks medium findings suspicious', () => {

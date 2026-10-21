@@ -6,6 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-green)](package.json)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
+[![Coverage](https://img.shields.io/badge/coverage-90%25%20enforced%20in%20CI-blueviolet)](packages/skillsentry/vitest.config.ts)
 
 ![SkillSentry dashboard demo: a poisoned SKILL.md is flagged DANGEROUS (risk 71/100 · 5 findings mapped to OWASP LLM Top 10, AST10 and MCP Top 10) in 22 ms; a clean skill scans clean — and with no local model running, the scan degrades gracefully to static-only](docs/demo.gif)
 
@@ -18,6 +19,8 @@ SkillSentry is a scanner that treats agent-readable text as an attack surface:
 - **Every finding is mapped** to [OWASP LLM Top 10 (2026)](https://genai.owasp.org/Top-10-2026/), [OWASP Agentic Skills Top 10](https://github.com/OWASP/www-project-agentic-skills-top-10) and the [OWASP MCP Top 10](https://github.com/OWASP-MCP-Governance-and-Risk-Project/docs), with severity, evidence and remediation.
 - **Zero runtime dependencies.** A security tool that ships 500 transitive deps would be ironic. SkillSentry ships none.
 - **Deterministic by construction — and by test.** The same input always produces the same findings, no matter what was scanned before it. A dedicated determinism suite scans adversarial targets in shuffled orders on every commit; if results ever drift, CI fails.
+- **Rug-pull detection built in.** `skillsentry diff <old> <new>` compares two snapshots of the same skills semantically (by name, across directories) and fails when the *new* snapshot introduces findings — the update-after-install attack one-shot scanners never see.
+- **CI-native output formats.** `--json` for machines, `--md` for humans, and `--sarif` for GitHub Code Scanning: findings land in the repo's Security tab with rule metadata, remediation and standards mapping attached.
 
 ---
 
@@ -48,6 +51,12 @@ npx skillsentry . --no-ai
 
 # pick your local open-weight model (any OpenAI-compatible runtime)
 npx skillsentry . --model llama3.2:3b
+
+# rug-pull check: did an updated skill turn poisonous since the backup?
+npx skillsentry diff ~/skills-backup/ ~/.claude/skills/ --fail-on high
+
+# SARIF 2.1.0 for GitHub Code Scanning
+npx skillsentry . --sarif > skillsentry.sarif
 ```
 
 Or clone and run from source:
@@ -143,6 +152,23 @@ npm run dev:dashboard    # http://localhost:3210
 
 Exit codes: `0` clean under threshold, `1` findings at/above `--fail-on`, `2` usage error. Default threshold: `high`.
 
+Upload findings to GitHub's Security tab with SARIF:
+
+```yaml
+- name: Scan agent skills (SARIF)
+  run: npx skillsentry . --sarif --no-ai > skillsentry.sarif
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: skillsentry.sarif
+```
+
+And gate skill updates — a scheduled workflow that fails when an installed skill turns poisonous:
+
+```yaml
+- name: Rug-pull watch
+  run: npx skillsentry diff "$RUNNER_TEMP/skills-baseline/" "$HOME/.claude/skills/" --fail-on high
+```
+
 ## Project layout
 
 ```
@@ -150,7 +176,9 @@ packages/skillsentry/     core engine + CLI (TypeScript, zero deps, vitest)
   src/rules/              SS-001…SS-009 static rules
   src/ai.ts               open-weight semantic layer (Ollama / OpenAI-compatible)
   src/scanner.ts          discovery, parsing, orchestration, scoring
+  src/diff.ts             rug-pull detection between two snapshots
   src/report.ts           terminal / JSON / Markdown renderers
+  src/report-sarif.ts     SARIF 2.1.0 renderer (GitHub Code Scanning)
 samples/                  clean + deliberately poisoned fixtures (used by tests)
 apps/dashboard/           local Next.js UI around the same engine
 ```
@@ -161,6 +189,9 @@ apps/dashboard/           local Next.js UI around the same engine
 - **TypeScript refuses unchecked indexing** (`noUncheckedIndexedAccess`) and **ESLint runs type-checked at zero warnings** in CI — the lint gate exists because those tools caught real defects during development, not as decoration.
 - **The CI self-scan is two-sided**: clean fixtures must exit 0, poisoned fixtures must be caught (exit 1 expected and asserted). If a rule ever goes blind on a known pattern, CI fails.
 - **Secrets never re-print.** Findings that match credential patterns emit masked evidence (`sk-ant…<redacted 37 chars>`), so reports are safe to paste into issues and CI logs.
+- **Verdicts cannot contradict their own findings.** A report listing findings is never `CLEAN` — any low-or-above finding makes it at least `suspicious` (info-only stays clean). The badge and the finding list always agree.
+- **JSONC is a first-class input.** VS Code and Claude Desktop configs are frequently commented; a string-aware stripper (`stripJsonc`) removes comments and trailing commas while preserving URLs like `https://host/a//b` verbatim — a naive regex pass would corrupt them.
+- **Coverage is enforced, not decorative**: `vitest --coverage` with thresholds (90% lines / 79% branches measured) fails CI if it drops. `npm run bench` pins the static engine's throughput (~2.4k files/s on the sample gallery, median 4.1 ms/run) so regressions are visible.
 
 ## Provenance
 
@@ -172,10 +203,10 @@ SkillSentry is a *review aid*, not a sandbox. It reads the surfaces an agent wil
 
 ## Roadmap
 
+- [x] SARIF output for GitHub code scanning (v0.3.0)
+- [x] Skill diffing: `skillsentry diff` between two versions of a skill to catch silent rug-pulls (v0.3.0)
 - [ ] MCP live discovery: connect to a running MCP server and scan its advertised tools (client-side, still local)
-- [ ] SARIF output for GitHub code scanning
 - [ ] Rule packs for A2A agent cards
-- [ ] Skill diffing: `skillsentry diff` between two versions of a skill to catch silent rug-pulls
 - [ ] Signature pinning helper for pinned installs
 
 ## Contributing

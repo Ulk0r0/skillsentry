@@ -115,10 +115,15 @@ export function aggregateRisk(findings: Finding[]): { riskScore: number; verdict
   const riskScore = Math.min(100, Math.round(max * 6.5 + breadth));
   const hasCritical = findings.some((f) => f.severity === 'critical');
   const worst = findings.reduce<Severity>((acc, f) => (severityRank(f.severity) > severityRank(acc) ? f.severity : acc), 'info');
+  // A CLEAN badge next to a listed finding is a contradiction a reviewer
+  // would rightly distrust — any low-or-above finding makes the report at
+  // least suspicious. info-only reports stay clean (no rule emits info today;
+  // the level exists for library integrations).
+  const hasLowOrAbove = findings.some((f) => severityRank(f.severity) >= severityRank('low'));
 
   const verdict: Verdict =
     hasCritical || riskScore >= 60 ? 'dangerous'
-    : worst === 'medium' || worst === 'high' || riskScore >= 30 ? 'suspicious'
+    : worst === 'medium' || worst === 'high' || riskScore >= 30 || hasLowOrAbove ? 'suspicious'
     : 'clean';
   return { riskScore, verdict };
 }

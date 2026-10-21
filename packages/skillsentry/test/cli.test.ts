@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseArgs, CliError } from '../src/cli.js';
+import { parseArgs, parseDiffArgs, CliError } from '../src/cli.js';
 
 /**
  * The CLI argument parser is pure (throws CliError instead of exiting), so
@@ -53,5 +53,46 @@ describe('parseArgs', () => {
   it('treats non-flag arguments as paths', () => {
     const a = parseArgs(['samples', '-']);
     expect(a.paths).toEqual(['samples', '-']);
+  });
+
+  it('rejects combining output formats (--json + --md + --sarif)', () => {
+    expect(() => parseArgs(['--json', '--sarif'])).toThrow(CliError);
+    expect(() => parseArgs(['--md', '--json'])).toThrow(CliError);
+    expect(() => parseArgs(['--sarif'])).not.toThrow();
+  });
+});
+
+describe('parseDiffArgs (skillsentry diff <old> <new>)', () => {
+  it('takes exactly two positional snapshot paths with sane defaults', () => {
+    const a = parseDiffArgs(['/backup/skills', '/current/skills']);
+    expect(a.oldPath).toBe('/backup/skills');
+    expect(a.newPath).toBe('/current/skills');
+    expect(a.failOn).toBe('high');
+    expect(a.json).toBe(false);
+    expect(a.ai).toBe(true);
+  });
+
+  it('accepts the shared scan flags', () => {
+    const a = parseDiffArgs(['--json', '--fail-on', 'medium', '--no-ai', '--verbose', 'old', 'new']);
+    expect(a.json).toBe(true);
+    expect(a.failOn).toBe('medium');
+    expect(a.ai).toBe(false);
+    expect(a.verbose).toBe(true);
+  });
+
+  it('rejects one or three positionals', () => {
+    expect(() => parseDiffArgs(['only-one'])).toThrow(CliError);
+    expect(() => parseDiffArgs(['a', 'b', 'c'])).toThrow(CliError);
+    expect(() => parseDiffArgs([])).toThrow(CliError);
+  });
+
+  it('rejects --md/--sarif (diff defines only pretty and --json output)', () => {
+    expect(() => parseDiffArgs(['--md', 'a', 'b'])).toThrow(CliError);
+    expect(() => parseDiffArgs(['--sarif', 'a', 'b'])).toThrow(CliError);
+  });
+
+  it('rejects invalid --fail-on and unknown options', () => {
+    expect(() => parseDiffArgs(['--fail-on', 'cosmic', 'a', 'b'])).toThrow(CliError);
+    expect(() => parseDiffArgs(['--wat', 'a', 'b'])).toThrow(CliError);
   });
 });

@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-10-21
+
+Feature release: rug-pull detection, SARIF 2.1.0 output, JSONC-tolerant
+config parsing, enforced coverage and a benchmark harness. Still zero runtime
+dependencies; the scan API is additive only.
+
+### Added
+- **`skillsentry diff <old> <new>`** — rug-pull detection. Compares two
+  snapshots of the same skills/configs semantically (matched by kind + name,
+  so the snapshots may live in different directories) and reports added,
+  resolved and unchanged findings. Exit code 1 when the NEW snapshot
+  introduces findings at or above `--fail-on`: an updated skill that turns
+  poisonous fails the gate, a merely reworded one cannot sneak past (findings
+  match on rule + surface + severity, not on the attacker's prose).
+  `--json` available for machine consumption. Pure diff engine
+  (`diffResults`/`exitCodeForDiff`) exported for library use.
+- **`--sarif`** — SARIF 2.1.0 output for GitHub Code Scanning
+  (`github/codeql-action/upload-sarif`): deduplicated rule metadata with
+  remediation and standards help URIs, severity→level mapping
+  (critical/high→error, medium→warning, low/info→note), repo-relative
+  artifact URIs via the `root` option. Renderer exported as `renderSarif`.
+- **JSONC tolerance for MCP configs.** VS Code and Claude Desktop configs
+  are frequently commented. A string-aware stripper (`stripJsonc`) removes
+  `//` and block comments plus trailing commas while preserving URLs and
+  quoted text verbatim; parsing falls back to it before declaring a config
+  unparseable — previously, commented configs were scanned as opaque text
+  and comment prose could trigger text rules (false positives).
+- **Enforced coverage.** `@vitest/coverage-v8` (dev-only) with CI thresholds:
+  85% lines/statements/functions, 75% branches — measured today at 90/79/93
+  and only ever raised.
+- **`npm run bench`** — fixed-workload benchmark of the static engine
+  (sample gallery, AI off): median 4.1 ms/run, ~2.4k files/s, comparable
+  across commits.
+- Output-format guard: `--json`, `--md` and `--sarif` are mutually
+  exclusive; combining them is now a usage error instead of a silent
+  precedence pick.
+
+### Changed
+- **Verdict policy: a report with findings is never `CLEAN`.** Any
+  low-or-above finding now yields at least `suspicious`; previously a single
+  low finding produced `CLEAN risk 16/100` with the finding still listed —
+  a badge contradicting its own evidence. Info-only reports stay clean
+  (no shipped rule emits info today).
+
 ## [0.2.0] — 2026-10-21
 
 Quality and stability release: every known defect closed, determinism now

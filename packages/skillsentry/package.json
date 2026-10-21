@@ -1,6 +1,6 @@
 {
   "name": "skillsentry",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Local-first security scanner for AI agent skills (SKILL.md) and MCP server configs. Static rules + open-weight model analysis, zero runtime dependencies.",
   "type": "module",
   "license": "MIT",
@@ -49,10 +49,12 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "typescript": "^5.6.3",
     "vitest": "^2.1.9"
   }

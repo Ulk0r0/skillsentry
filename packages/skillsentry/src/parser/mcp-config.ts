@@ -34,20 +34,96 @@ export function isMcpConfigFile(fileName: string): boolean {
   return CONFIG_NAMES.has(fileName.toLowerCase());
 }
 
+/**
+ * Strip JSONC constructs (// and block comments, trailing commas) while
+ * leaving string contents untouched — an URL with double slashes or a block
+ * comment marker inside a quoted string must survive verbatim. Best effort:
+ * malformed JSON still fails the subsequent parse.
+ */
+export function stripJsonc(input: string): string {
+  const src = input.charCodeAt(0) === 0xfeff ? input.slice(1) : input;
+  let out = '';
+  let inStr = false;
+  let escaped = false;
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i] ?? '';
+    if (inStr) {
+      out += c;
+      if (escaped) escaped = false;
+      else if (c === '\\') escaped = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') {
+      inStr = true;
+      out += c;
+      continue;
+    }
+    if (c === '/' && src[i + 1] === '/') {
+      while (i < src.length && src[i] !== '\n') i++;
+      i--; // the loop's i++ lands back on the newline so it is preserved
+      continue;
+    }
+    if (c === '/' && src[i + 1] === '*') {
+      i += 2;
+      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
+      i++; // skip past the '/' of '*/'; loop i++ resumes after the comment
+      continue;
+    }
+    out += c;
+  }
+  // Drop trailing commas: a comma followed only by whitespace, then } or ].
+  let res = '';
+  inStr = false;
+  escaped = false;
+  for (let i = 0; i < out.length; i++) {
+    const c = out[i] ?? '';
+    if (inStr) {
+      res += c;
+      if (escaped) escaped = false;
+      else if (c === '\\') escaped = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') {
+      inStr = true;
+      res += c;
+      continue;
+    }
+    if (c === ',') {
+      let j = i + 1;
+      while (j < out.length && /\s/.test(out[j] ?? '')) j++;
+      const nxt = out[j];
+      if (nxt === '}' || nxt === ']') continue;
+    }
+    res += c;
+  }
+  return res;
+}
+
 export function parseMcpConfig(filePath: string, raw: string): ScanTarget {
   const surfaces: ScanSurface[] = [];
   let servers: ServerEntry[] = [];
+  let json: Record<string, unknown>;
   try {
-    const json = JSON.parse(raw) as Record<string, unknown>;
-    const bucket =
-      (asRecord(json['mcpServers'])) ??
-      (asRecord(json['servers'])) ??
-      (looksLikeServers(json) ? json : {});
-    servers = Object.entries(bucket).map(([name, v]) => ({ name, ...(asRecord(v) ?? {}) }));
+    json = JSON.parse(raw) as Record<string, unknown>;
   } catch {
-    surfaces.push({ location: 'file', text: raw.slice(0, 20000), label: 'unparseable JSON' });
-    return { path: filePath, kind: 'mcp-config', name: baseName(filePath), surfaces };
+    // VS Code and Claude Desktop configs are frequently JSONC (comments,
+    // trailing commas). Retry once with comments stripped before declaring
+    // the file unparseable — otherwise a commented config is scanned as
+    // opaque text and prose inside comments triggers text rules.
+    try {
+      json = JSON.parse(stripJsonc(raw)) as Record<string, unknown>;
+    } catch {
+      surfaces.push({ location: 'file', text: raw.slice(0, 20000), label: 'unparseable JSON' });
+      return { path: filePath, kind: 'mcp-config', name: baseName(filePath), surfaces };
+    }
   }
+  const bucket =
+    (asRecord(json['mcpServers'])) ??
+    (asRecord(json['servers'])) ??
+    (looksLikeServers(json) ? json : {});
+  servers = Object.entries(bucket).map(([name, v]) => ({ name, ...(asRecord(v) ?? {}) }));
 
   for (const s of servers) {
     const parts: string[] = [];

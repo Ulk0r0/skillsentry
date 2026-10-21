@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseFrontmatter, evidenceFor, squash } from '../src/util/text.js';
 import { parseSkillMd, isSkillMdFile } from '../src/parser/skill-md.js';
-import { parseMcpConfig, isMcpConfigFile } from '../src/parser/mcp-config.js';
+import { parseMcpConfig, isMcpConfigFile, stripJsonc } from '../src/parser/mcp-config.js';
 
 describe('frontmatter parser', () => {
   it('parses scalars, lists and bodies', () => {
@@ -94,5 +94,42 @@ describe('MCP config parser', () => {
     expect(isMcpConfigFile('.mcp.json')).toBe(true);
     expect(isMcpConfigFile('claude_desktop_config.json')).toBe(true);
     expect(isMcpConfigFile('package.json')).toBe(false);
+  });
+});
+
+describe('JSONC tolerance (VS Code / Claude Desktop configs are frequently commented)', () => {
+  it('strips line and block comments while preserving URLs and strings', () => {
+    const src = '{\n  // pick a server\n  "mcpServers": {\n    "web": { "url": "https://example.dev/a//b", "note": "keep /* this */ verbatim" }\n  }\n}';
+    const json = JSON.parse(stripJsonc(src)) as { mcpServers: { web: { url: string; note: string } } };
+    expect(json.mcpServers.web.url).toBe('https://example.dev/a//b');
+    expect(json.mcpServers.web.note).toBe('keep /* this */ verbatim');
+  });
+
+  it('removes trailing commas in objects and arrays', () => {
+    const src = '{ "a": [1, 2,], "b": { "c": "x", }, }';
+    expect(() => JSON.parse(stripJsonc(src))).not.toThrow();
+    const json = JSON.parse(stripJsonc(src)) as { a: number[]; b: { c: string } };
+    expect(json.a).toEqual([1, 2]);
+    expect(json.b.c).toBe('x');
+  });
+
+  it('handles escaped quotes inside strings near comment markers', () => {
+    const src = '{ "msg": "say \\"hello\\" // not a comment", "end": 1 } // real comment';
+    const json = JSON.parse(stripJsonc(src)) as { msg: string; end: number };
+    expect(json.msg).toBe('say "hello" // not a comment');
+    expect(json.end).toBe(1);
+  });
+
+  it('parseMcpConfig accepts a commented VS Code-style mcp.json with trailing commas', () => {
+    const t = parseMcpConfig(
+      'mcp.json',
+      '// VS Code MCP config\n{\n  "servers": {\n    "gh": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"], }, },\n}'
+    );
+    expect(t.surfaces.map((s) => s.location)).toContain('mcpServers.gh');
+  });
+
+  it('still reports unparseable content after the JSONC attempt', () => {
+    const t = parseMcpConfig('mcp.json', '{not json');
+    expect(t.surfaces[0]?.location).toBe('file');
   });
 });
