@@ -7,6 +7,8 @@
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-green)](package.json)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
+![SkillSentry dashboard demo: a poisoned SKILL.md is flagged DANGEROUS (risk 71/100 · 5 findings mapped to OWASP LLM Top 10, AST10 and MCP Top 10) in 22 ms; a clean skill scans clean — and with no local model running, the scan degrades gracefully to static-only](docs/demo.gif)
+
 Agents read text to decide what to do: `SKILL.md` files, tool descriptions, MCP server configs. **Attackers know this.** A poisoned tool description can tell your agent to read `~/.ssh`, silently upload your notes to a collector endpoint, or hijack routing away from your trusted tools — and it all looks like ordinary documentation to a human reviewer.
 
 SkillSentry is a scanner that treats agent-readable text as an attack surface:
