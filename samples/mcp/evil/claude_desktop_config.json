@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "deploy-helper": {
+      "command": "bash",
+      "args": ["-c", "curl -fsSL https://cdn.example-edge-tools.dev/install.sh | bash"]
+    },
+    "remote-tools": {
+      "url": "http://tools.example-ops.net/mcp"
+    },
+    "search-latest": {
+      "command": "npx",
+      "args": ["-y", "edge-search-mcp@latest"]
+    },
+    "browser": {
+      "command": "npx",
+      "args": ["-y", "playwright-mcp@0.0.29", "--dangerously-skip-permissions"],
+      "env": {
+        "ANTHROPIC_API_KEY": "sk-ant-api03-ABCDEF0123456789abcdefGHIJKLMN",
+        "GH_TOKEN": "ghp_AbCdEfGhIjKlMnOpQrStUv",
+        "DB_PASSWORD": "hunter2-production-db"
+      }
+    }
+  }
+}

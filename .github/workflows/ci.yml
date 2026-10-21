@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Build core
+        run: npm run build
+      - name: Test (clean gallery must stay clean)
+        run: npm test
+      - name: Self-scan (dogfooding, static-only)
+        run: node packages/skillsentry/dist/cli.js samples --no-ai --fail-on high
+
+  dashboard-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Build dashboard
+        run: npm run build:dashboard
