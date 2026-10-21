@@ -8,6 +8,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      # Node 22 runner uploads the self-scan SARIF to Code Scanning.
+      security-events: write
     strategy:
       matrix:
         node: [20, 22, 24]
@@ -31,6 +34,18 @@ jobs:
         run: npm test
       - name: Coverage (thresholds enforced)
         run: npm run test:coverage
+      # SkillSentry watching SkillSentry: SARIF over the real source (the
+      # intentionally poisoned samples/ are excluded) lands in the repo's
+      # Code Scanning tab — any future poisoned instruction in packages/ or
+      # apps/ becomes a visible GitHub alert, not a silent regression.
+      - name: Self-scan SARIF (own source, fixtures excluded)
+        if: matrix.node == 22
+        run: node packages/skillsentry/scripts/self-sarif.mjs
+      - name: Upload SARIF (GitHub Code Scanning)
+        if: matrix.node == 22
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: skillsentry.sarif
       - name: Self-scan — clean fixtures must pass (exit 0)
         run: node packages/skillsentry/dist/cli.js samples/skills/clean samples/mcp/clean --no-ai --fail-on medium
       - name: Self-scan — poisoned fixtures must be caught (exit 1 expected)

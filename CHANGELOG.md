@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10-21
+
+Detection breadth and governance release: two new static rules (RCE
+one-liners, typosquatting), inline suppressions with a mandatory reason,
+property-based robustness tests, and the scanner now watches its own source
+in GitHub Code Scanning. Still zero runtime dependencies (fast-check is a
+dev-only dependency); the scan API is additive only.
+
+### Added
+- **SS-010 — Remote-code-execution one-liners** (`critical`). Download-and-
+  execute primitives in agent-readable text or MCP command lines: `curl|bash`
+  / `wget|sh` pipes (including through `sudo`), PowerShell `iwr|irm → iex`
+  chains, process/command substitution (`bash <(curl …)`, `sh -c "$(curl …)"`),
+  download + `chmod +x` staging, and `eval`/`exec` of base64-decoded payloads
+  (JS `atob`, Python `base64.b64decode`, Node `Buffer.from(…, 'base64')`).
+  SS-004 covered destructive commands already spelled out; SS-002 covered
+  data movement — "fetch and run" was the uncovered highest-leverage primitive.
+- **SS-011 — Typosquatting / installs from non-official sources** (`high`).
+  Deterministic, offline supply-chain checks on install lines
+  (`npm/pnpm/yarn/bun install|add`, `npx/pnpx/bunx`, `pip/uv install`) and
+  MCP commands: package names within Damerau-Levenshtein distance 2 of a
+  reviewed set of ~40 popular npm/PyPI packages (bounded, early-exit
+  implementation exported as `boundedDistance`), direct-URL/`git+` installs,
+  and `--registry` / `--index-url` / `--extra-index-url` overrides away from
+  npmjs.org / pypi.org. Trailing prose punctuation is stripped before
+  comparing names ("install numpy." was a distance-1 false positive).
+- **Inline suppressions with a mandatory reason** — the ESLint escape hatch,
+  made explicit for security findings: `<!-- skillsentry-ignore SS-003
+  SS-007: reason -->`. A comment without at least one valid rule id or
+  without a reason is ignored (no blank checks). Suppression is file-level
+  and never silent: suppressed findings stay in the report (`suppressed` in
+  JSON, one audit line in terminal and Markdown renderers) with the winning
+  reason, while scoring, verdict, exit code and diff use only kept findings.
+  Pure engine (`parseSuppressions`/`applySuppressions`) exported for library
+  use.
+- **Property-based tests** (`test/properties.test.ts`, fast-check as a
+  dev-only dependency): for every input — the parsers never throw on
+  arbitrary text (300 runs each), `stripJsonc` round-trips any valid JSON
+  value (including strings full of `//` and `/*`), `aggregateRisk` stays in
+  0–100 with a known verdict and `clean` on empty, critical findings always
+  yield `dangerous`, and suppression comments always fully cover their named
+  rules.
+- **Own-source Code Scanning upload.** CI (Node 22 lane) generates a SARIF
+  report over `packages/` + `apps/` via
+  `packages/skillsentry/scripts/self-sarif.mjs` and uploads it with
+  `github/codeql-action/upload-sarif@v3` (`security-events: write`). The
+  intentionally poisoned `samples/` are deliberately excluded — they are
+  attack fixtures, not code. Any future poisoned instruction in the
+  scanner's own source becomes a visible GitHub alert.
+- The rule registry grows from 9 to 11 rules; `ALL_RULES` ids are asserted
+  in order by a unit test.
+
+### Fixed
+- **SS-005 no longer flags the suppression mechanism.** The official
+  `<!-- skillsentry-ignore … -->` comment contains the word "ignore", which
+  tripped the hidden-comment directive heuristic — the tool would flag its
+  own escape hatch. Declared, reasoned ignore comments are now exempt from
+  the hidden-channel rule (they remain visible, reasoned and audited).
+- **ANSI escapes no longer pollute piped output.** Colors now follow the
+  standard UNIX contract: enabled only when stdout is a TTY. Piping into
+  `tee`, a file or a CI log stays escape-free; `FORCE_COLOR=1` opts back in
+  (e.g. `skillsentry . | less -R`), and `NO_COLOR` still wins over both.
+- **`--verbose` now reports skipped inputs.** Paths that do not exist, are
+  unreadable, or are not scan candidates were silently recorded in
+  `skipped` without any stderr diagnostic — with `--verbose` each skip is
+  logged with its reason.
+
+### Changed
+- Tests: 97 → 127 (SS-010 ×5, SS-011 ×4, suppressions ×12, property-based
+  invariants ×8, TTY/verbose regression ×2). Measured coverage holds above
+  the enforced thresholds.
+
 ## [0.3.0] — 2026-10-21
 
 Feature release: rug-pull detection, SARIF 2.1.0 output, JSONC-tolerant

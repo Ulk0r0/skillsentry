@@ -83,6 +83,11 @@ export const obfuscation: Rule = {
     }
 
     for (const cm of text.matchAll(HIDDEN_COMMENT)) {
+      // The official suppression comment is not a hidden channel: it is
+      // declared in the source, requires a reason and stays visible in the
+      // report's audit trail. Flagging it would make the mechanism
+      // self-defeating.
+      if (/^<!--\s*skillsentry-ignore\b/.test(cm[0] ?? '')) continue;
       if (matches(DIRECTIVE_WORDS, cm[0])) {
         out.push({
           evidence: squash(cm[0]).slice(0, 160),

@@ -10,4 +10,5 @@ export { renderTerminal, renderMarkdown, renderJson, exitCodeFor, countBySeverit
 export { renderSarif, type SarifOptions } from './report-sarif.js';
 export { diffResults, exitCodeForDiff, renderDiffTerminal, renderDiffJson, type DiffResult, type DiffEntry } from './diff.js';
 export { ALL_RULES, RULES_BY_ID, rulesFor } from './rules/index.js';
+export { parseSuppressions, applySuppressions, type Suppression } from './suppress.js';
 export * from './types.js';

@@ -6,7 +6,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-green)](package.json)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
-[![Coverage](https://img.shields.io/badge/coverage-90%25%20enforced%20in%20CI-blueviolet)](packages/skillsentry/vitest.config.ts)
+[![Coverage](https://img.shields.io/badge/coverage-92%25%20enforced%20in%20CI-blueviolet)](packages/skillsentry/vitest.config.ts)
+[![Code Scanning](https://img.shields.io/badge/Code%20Scanning-SkillSentry%20SARIF-brightgreen)](.github/workflows/ci.yml)
 
 ![SkillSentry dashboard demo: a poisoned SKILL.md is flagged DANGEROUS (risk 71/100 · 5 findings mapped to OWASP LLM Top 10, AST10 and MCP Top 10) in 22 ms; a clean skill scans clean — and with no local model running, the scan degrades gracefully to static-only](docs/demo.gif)
 
@@ -14,7 +15,7 @@ Agents read text to decide what to do: `SKILL.md` files, tool descriptions, MCP 
 
 SkillSentry is a scanner that treats agent-readable text as an attack surface:
 
-- **9 deterministic static rules** (SS-001…SS-009) for the known poisoning patterns — hidden `<IMPORTANT>` directives, exfiltration endpoints, credential paths, destructive commands, base64-smuggled payloads, tool shadowing, surveillance behavior, insecure MCP configs, and deceptive metadata.
+- **11 deterministic static rules** (SS-001…SS-011) for the known poisoning patterns — hidden `<IMPORTANT>` directives, exfiltration endpoints, credential paths, destructive commands, base64-smuggled payloads, tool shadowing, surveillance behavior, insecure MCP configs, deceptive metadata, remote-code-execution one-liners, and typosquatted installs.
 - **An open-weight semantic layer**: a local model (Ollama with Gemma by default, or any OpenAI-compatible runtime — llama.cpp, LM Studio, vLLM) reviews the *intent* of the text and catches what regexes miss. If no local runtime is running, the scan degrades gracefully to static-only. **Nothing ever leaves your machine.**
 - **Every finding is mapped** to [OWASP LLM Top 10 (2026)](https://genai.owasp.org/Top-10-2026/), [OWASP Agentic Skills Top 10](https://github.com/OWASP/www-project-agentic-skills-top-10) and the [OWASP MCP Top 10](https://github.com/OWASP-MCP-Governance-and-Risk-Project/docs), with severity, evidence and remediation.
 - **Zero runtime dependencies.** A security tool that ships 500 transitive deps would be ironic. SkillSentry ships none.
@@ -117,8 +118,20 @@ Note the secret in the evidence: `sk-ant…<redacted 37 chars>`. **SkillSentry n
 | SS-007 | Data collection / surveillance | browser history + monitor, clipboard + harvest, keystrokes + record, mic/camera/location combos | high |
 | SS-008 | Insecure MCP server config | `curl \| bash`, `@latest` unpinned installs, `--dangerously-skip-permissions`, cleartext `http://` endpoints, inline secrets | high |
 | SS-009 | Deceptive metadata | "read-only" claims contradicted by write evidence, self-attested "official/verified" authority | medium |
+| SS-010 | Remote-code-execution one-liners | `curl \| bash`, `iwr \| iex`, `bash <(curl …)`, download + `chmod +x` staging, `eval` of base64-decoded payloads | critical |
+| SS-011 | Typosquatting / non-official installs | near-miss package names (Damerau-Levenshtein ≤ 2 vs 40 popular packages), direct-URL/git installs, `--registry` / `--index-url` overrides | high |
 
 Each rule documents its OWASP mapping inline in [packages/skillsentry/src/rules/](packages/skillsentry/src/rules) — every finding carries `standards: StandardRef[]` pointing at the official framework entry, so reports are readable by humans *and* by governance tooling.
+
+### Inline suppressions, with a reason
+
+Findings can be silenced in-file — but never silently:
+
+```markdown
+<!-- skillsentry-ignore SS-003 SS-007: documented credential reader, user-approved backup workflow -->
+```
+
+A comment needs at least one rule id **and** a reason, or it is ignored. Suppressed findings stay in the report (`suppressed` in `--json`, one audit line in terminal/Markdown) with the winning reason attached, and scoring/verdict/exit-code use only the kept findings. SS-005 does not flag suppression comments themselves — a declared, reasoned ignore is not a hidden channel.
 
 ## The open-weight semantic layer
 
@@ -152,7 +165,7 @@ npm run dev:dashboard    # http://localhost:3210
 
 Exit codes: `0` clean under threshold, `1` findings at/above `--fail-on`, `2` usage error. Default threshold: `high`.
 
-Upload findings to GitHub's Security tab with SARIF:
+Upload findings to GitHub's Security tab with SARIF — this is exactly what SkillSentry's own CI does ([ci.yml](.github/workflows/ci.yml) generates `skillsentry.sarif` over `packages/` + `apps/` and uploads it via `upload-sarif@v3`, so any poisoned instruction that ever lands in the scanner's own source becomes a visible GitHub alert):
 
 ```yaml
 - name: Scan agent skills (SARIF)
@@ -173,12 +186,15 @@ And gate skill updates — a scheduled workflow that fails when an installed ski
 
 ```
 packages/skillsentry/     core engine + CLI (TypeScript, zero deps, vitest)
-  src/rules/              SS-001…SS-009 static rules
+  src/rules/              SS-001…SS-011 static rules
+  src/suppress.ts         inline suppressions (rule ids + mandatory reason)
   src/ai.ts               open-weight semantic layer (Ollama / OpenAI-compatible)
   src/scanner.ts          discovery, parsing, orchestration, scoring
   src/diff.ts             rug-pull detection between two snapshots
   src/report.ts           terminal / JSON / Markdown renderers
   src/report-sarif.ts     SARIF 2.1.0 renderer (GitHub Code Scanning)
+  scripts/bench.mjs       fixed-workload throughput benchmark
+  scripts/self-sarif.mjs  SARIF over the scanner's own source (CI upload)
 samples/                  clean + deliberately poisoned fixtures (used by tests)
 apps/dashboard/           local Next.js UI around the same engine
 ```
@@ -191,7 +207,9 @@ apps/dashboard/           local Next.js UI around the same engine
 - **Secrets never re-print.** Findings that match credential patterns emit masked evidence (`sk-ant…<redacted 37 chars>`), so reports are safe to paste into issues and CI logs.
 - **Verdicts cannot contradict their own findings.** A report listing findings is never `CLEAN` — any low-or-above finding makes it at least `suspicious` (info-only stays clean). The badge and the finding list always agree.
 - **JSONC is a first-class input.** VS Code and Claude Desktop configs are frequently commented; a string-aware stripper (`stripJsonc`) removes comments and trailing commas while preserving URLs like `https://host/a//b` verbatim — a naive regex pass would corrupt them.
-- **Coverage is enforced, not decorative**: `vitest --coverage` with thresholds (90% lines / 79% branches measured) fails CI if it drops. `npm run bench` pins the static engine's throughput (~2.4k files/s on the sample gallery, median 4.1 ms/run) so regressions are visible.
+- **Coverage is enforced, not decorative**: `vitest --coverage` with thresholds (92% lines / 80% branches measured) fails CI if it drops. `npm run bench` pins the static engine's throughput (~2.6k files/s on the sample gallery, median 3.9 ms/run) so regressions are visible.
+- **Properties, not just examples**: beyond unit tests, `test/properties.test.ts` (fast-check, dev-only dep) proves invariants for *every* input — the parsers never throw on arbitrary text, `stripJsonc` round-trips any valid JSON (including strings full of `//`), risk stays in 0–100 with a known verdict, and suppression comments always fully cover their named rules.
+- **Typosquat detection is an algorithm, not a list of bad names**: SS-011 compares package specs in install lines against a reviewed set of popular npm/PyPI packages with bounded Damerau-Levenshtein distance (≤ 2 edits, early-exit), fully offline and deterministic.
 
 ## Provenance
 
@@ -203,8 +221,10 @@ SkillSentry is a *review aid*, not a sandbox. It reads the surfaces an agent wil
 
 ## Roadmap
 
-- [x] SARIF output for GitHub code scanning (v0.3.0)
+- [x] SARIF output for GitHub code scanning (v0.3.0) + own-CI upload with `security-events` (v0.4.0)
 - [x] Skill diffing: `skillsentry diff` between two versions of a skill to catch silent rug-pulls (v0.3.0)
+- [x] Inline suppressions with mandatory reasons and an audit trail (v0.4.0)
+- [x] Property-based robustness suite for parsers, JSONC stripping and scoring (v0.4.0)
 - [ ] MCP live discovery: connect to a running MCP server and scan its advertised tools (client-side, still local)
 - [ ] Rule packs for A2A agent cards
 - [ ] Signature pinning helper for pinned installs

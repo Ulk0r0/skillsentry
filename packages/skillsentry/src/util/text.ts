@@ -12,9 +12,15 @@ import type { Severity } from '../types.js';
  * Color support is resolved at render time, not at import time: the CLI's
  * `--no-color` flag mutates `process.env.NO_COLOR` after modules load, and
  * capturing the value here would silently break the flag.
+ *
+ * Beyond NO_COLOR, standard UNIX convention applies: piped output (files,
+ * `tee`, CI logs) must stay escape-free, so color requires stdout to be a
+ * TTY. Set FORCE_COLOR=1 to opt back in when piping (e.g. `less -R`).
  */
 function colorEnabled(): boolean {
-  return process.env.NO_COLOR == null;
+  if (process.env.NO_COLOR != null) return false;
+  if (process.env.FORCE_COLOR === '1' || process.env.FORCE_COLOR === 'true') return true;
+  return process.stdout?.isTTY === true;
 }
 
 function wrap(open: string, close: string) {

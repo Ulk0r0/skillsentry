@@ -81,11 +81,24 @@ export interface AiAssessment {
 
 export type Verdict = 'clean' | 'suspicious' | 'dangerous';
 
+/**
+ * A finding matched a `<!-- skillsentry-ignore SS-xxx: reason -->` comment
+ * and was excluded from scoring. Kept in the report so suppressions can
+ * never become a silent hole.
+ */
+export interface SuppressedFinding {
+  ruleId: string;
+  reason: string;
+  evidence: string;
+}
+
 export interface ScanReport {
   path: string;
   kind: TargetKind;
   name: string;
   findings: Finding[];
+  /** Findings excluded by inline ignore comments (audit trail). */
+  suppressed?: SuppressedFinding[];
   /** 0..100 aggregate risk. */
   riskScore: number;
   verdict: Verdict;

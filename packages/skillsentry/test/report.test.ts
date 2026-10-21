@@ -70,16 +70,34 @@ describe('ANSI color handling', () => {
   it('respects NO_COLOR evaluated at render time (the --no-color flag sets it late)', async () => {
     const res = await mixedResult();
     const prev = process.env.NO_COLOR;
+    const prevForce = process.env.FORCE_COLOR;
     try {
       process.env.NO_COLOR = '1';
       const plain = renderTerminal(res);
       expect(plain).not.toContain('\u001B[');
       delete process.env.NO_COLOR;
+      // stdout under vitest is a pipe, so color is TTY-gated off; force it the
+      // way a user would when piping into a color-aware pager.
+      process.env.FORCE_COLOR = '1';
       const colored = renderTerminal(res);
       expect(colored).toContain('\u001B[');
     } finally {
       if (prev === undefined) delete process.env.NO_COLOR;
       else process.env.NO_COLOR = prev;
+      if (prevForce === undefined) delete process.env.FORCE_COLOR;
+      else process.env.FORCE_COLOR = prevForce;
+    }
+  });
+
+  it('keeps piped (non-TTY) output escape-free unless FORCE_COLOR is set', async () => {
+    const res = await mixedResult();
+    const prevForce = process.env.FORCE_COLOR;
+    delete process.env.FORCE_COLOR;
+    try {
+      // stdout under vitest is a pipe: the TTY gate must keep it clean.
+      expect(renderTerminal(res)).not.toContain('\u001B[');
+    } finally {
+      if (prevForce !== undefined) process.env.FORCE_COLOR = prevForce;
     }
   });
 });

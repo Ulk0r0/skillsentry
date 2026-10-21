@@ -9,6 +9,8 @@ import { crossToolShadowing } from './cross-tool-shadowing.js';
 import { dataCollection } from './data-collection.js';
 import { insecureMcpConfig } from './insecure-mcp-config.js';
 import { metadataMismatch } from './metadata-mismatch.js';
+import { rceOneliners } from './rce-oneliners.js';
+import { packageInstall } from './package-install.js';
 
 /**
  * The static rule registry. Every rule is deterministic and offline — the
@@ -23,7 +25,9 @@ export const ALL_RULES: Rule[] = [
   crossToolShadowing,     // SS-006
   dataCollection,         // SS-007
   insecureMcpConfig,      // SS-008
-  metadataMismatch        // SS-009
+  metadataMismatch,       // SS-009
+  rceOneliners,           // SS-010
+  packageInstall          // SS-011
 ];
 
 export const RULES_BY_ID: ReadonlyMap<string, Rule> = new Map(ALL_RULES.map((r) => [r.id, r]));
@@ -33,4 +37,4 @@ export function rulesFor(kind: TargetKind): Rule[] {
 }
 
 export type { Rule, RawMatch } from './rule.js';
-export { hiddenInstructions, exfiltration, credentialAccess, destructiveCommands, obfuscation, crossToolShadowing, dataCollection, insecureMcpConfig, metadataMismatch };
+export { hiddenInstructions, exfiltration, credentialAccess, destructiveCommands, obfuscation, crossToolShadowing, dataCollection, insecureMcpConfig, metadataMismatch, rceOneliners, packageInstall };

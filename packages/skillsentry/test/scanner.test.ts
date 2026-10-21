@@ -123,4 +123,14 @@ describe('scanPaths over samples/', () => {
     expect(res.filesScanned).toBe(10);
     expect(res.skipped).toEqual(['/definitely/missing/path']);
   }, 30000);
+
+  it('--verbose diagnostics: logs every skipped input to the log callback', async () => {
+    const lines: string[] = [];
+    const res = await scanPaths(['/definitely/missing/path', SAMPLES], {
+      ...noAi,
+      log: (m: string) => lines.push(m)
+    });
+    expect(res.skipped).toContain('/definitely/missing/path');
+    expect(lines.some((l) => l.includes('/definitely/missing/path') && l.startsWith('skipped'))).toBe(true);
+  }, 30000);
 });

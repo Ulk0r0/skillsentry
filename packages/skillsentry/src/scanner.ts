@@ -14,6 +14,7 @@ import { severityRank } from './types.js';
 import { parseSkillMd, isSkillMdFile } from './parser/skill-md.js';
 import { parseMcpConfig, isMcpConfigFile } from './parser/mcp-config.js';
 import { rulesFor } from './rules/index.js';
+import { applySuppressions } from './suppress.js';
 import { assessWithAi, probeAi, DEFAULT_AI_BASE_URL, DEFAULT_MODEL } from './ai.js';
 
 /** Deterministic, offline core. The AI layer is additive and optional. */
@@ -24,7 +25,7 @@ const MAX_MATCHES_PER_RULE = 12;
 
 // ------------------------------------------------------------ discovery ----
 
-async function collectFiles(inputs: string[], skipped: string[]): Promise<string[]> {
+async function collectFiles(inputs: string[], skipped: string[], log?: (m: string) => void): Promise<string[]> {
   const files = new Set<string>();
   for (const input of inputs) {
     let st;
@@ -32,11 +33,15 @@ async function collectFiles(inputs: string[], skipped: string[]): Promise<string
       st = await fs.stat(input);
     } catch {
       skipped.push(input);
+      log?.(`skipped (does not exist or unreadable): ${input}`);
       continue;
     }
     if (st.isFile()) {
       if (isCandidate(input)) files.add(path.resolve(input));
-      else skipped.push(input);
+      else {
+        skipped.push(input);
+        log?.(`skipped (not a SKILL.md / MCP config candidate): ${input}`);
+      }
     } else if (st.isDirectory()) {
       await walk(input, files, 0);
     }
@@ -137,14 +142,18 @@ export async function scanText(
 ): Promise<ScanReport> {
   const started = Date.now();
   const target = parseTarget(fileName, content);
-  const findings = runStaticRules(target);
-  const { riskScore, verdict } = aggregateRisk(findings);
+  const staticFindings = runStaticRules(target);
+  // Inline suppressions with a mandatory reason; suppressed items stay in
+  // the report for audit, scoring/verdict use only the kept findings.
+  const { kept, suppressed } = applySuppressions(staticFindings, content);
+  const { riskScore, verdict } = aggregateRisk(kept);
 
   const report: ScanReport = {
     path: target.path,
     kind: target.kind,
     name: target.name,
-    findings,
+    findings: kept,
+    suppressed: suppressed.length > 0 ? suppressed : undefined,
     riskScore,
     verdict,
     ai: null,
@@ -166,7 +175,7 @@ export async function scanText(
 
 export async function scanPaths(inputs: string[], opts: ScanOptions = {}): Promise<ScanResult> {
   const skipped: string[] = [];
-  const files = await collectFiles(inputs, skipped);
+  const files = await collectFiles(inputs, skipped, opts.log);
 
   let aiAvailable = false;
   if (opts.ai !== false && files.length > 0) {
@@ -184,6 +193,7 @@ export async function scanPaths(inputs: string[], opts: ScanOptions = {}): Promi
       raw = await fs.readFile(file, 'utf8');
     } catch {
       skipped.push(file);
+      opts.log?.(`skipped (read error): ${file}`);
       continue;
     }
     const reportOpts: ScanOptions = aiAvailable ? opts : { ...opts, ai: false };

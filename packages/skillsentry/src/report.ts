@@ -48,6 +48,13 @@ export function renderTerminal(result: ScanResult): string {
       }
     }
 
+    if (r.suppressed?.length) {
+      // Suppressions are never silent: the audit trail is one line here and
+      // full reasons in --json.
+      const ids = [...new Set(r.suppressed.map((s) => s.ruleId))].join(', ');
+      L.push(`    ${ansi.dim(`⊘ ${r.suppressed.length} finding(s) suppressed by inline ignore (${ids}) — see --json for reasons`)}`);
+    }
+
     if (r.ai) {
       L.push(`    ${ansi.magenta('◆ AI review')} ${ansi.dim(`${r.ai.model} · severity ${r.ai.severity} · confidence ${(r.ai.confidence * 100).toFixed(0)}%`)}`);
       L.push(`        ${ansi.dim('intent:')} ${squash(r.ai.intent)}`);
@@ -112,6 +119,11 @@ export function renderMarkdown(result: ScanResult): string {
     if (r.ai) {
       L.push(`**AI review** (${r.ai.model}): severity ${r.ai.severity}, confidence ${(r.ai.confidence * 100).toFixed(0)}%`, '');
       L.push(`> ${squash(r.ai.rationale)}`, '');
+    }
+    if (r.suppressed?.length) {
+      const ids = [...new Set(r.suppressed.map((s) => s.ruleId))].join(', ');
+      const reason = squash(r.suppressed[0]?.reason ?? '');
+      L.push(`_⊘ ${r.suppressed.length} finding(s) suppressed by inline ignore (${ids}) — reason: "${reason}"_`, '');
     }
   }
   return L.join('\n');
