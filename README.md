@@ -8,6 +8,7 @@
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 [![Coverage](https://img.shields.io/badge/coverage-92%25%20enforced%20in%20CI-blueviolet)](packages/skillsentry/vitest.config.ts)
 [![Code Scanning](https://img.shields.io/badge/Code%20Scanning-SkillSentry%20SARIF-brightgreen)](.github/workflows/ci.yml)
+[![DEV write-up](https://img.shields.io/badge/DEV-Featured%20write%20up-black?logo=devdotto&logoColor=white)](https://dev.to/ulk0r0/skillsentry-the-laziest-way-to-keep-your-ai-agents-skills-honest-253m)
 
 ![SkillSentry dashboard demo: a poisoned SKILL.md is flagged DANGEROUS (risk 71/100 · 5 findings mapped to OWASP LLM Top 10, AST10 and MCP Top 10) in 22 ms; a clean skill scans clean — and with no local model running, the scan degrades gracefully to static-only](docs/demo.gif)
 
@@ -213,7 +214,7 @@ apps/dashboard/           local Next.js UI around the same engine
 
 ## Provenance
 
-SkillSentry is an original project, written from scratch in October 2026 for Hacktoberfest and the DEV Challenge S4 ("build with open-source AI"). It has **no fork parent**: `git log` starts at the initial commit, and the only external references are published standards (OWASP LLM Top 10 2026, the agentskills.io skill spec, OWASP MCP guidance), which the rules cite — never copy. The demo GIF is captured by a committed Playwright script against the repo's own dashboard; every asset in this README is regenerable from source.
+SkillSentry is an original project, written from scratch in October 2026 for Hacktoberfest and the DEV Challenge S4 ("build with open-source AI"). It has **no fork parent**: `git log` starts at the initial commit, and the only external references are published standards (OWASP LLM Top 10 2026, the agentskills.io skill spec, OWASP MCP guidance), which the rules cite — never copy. The demo GIF is captured by a committed Playwright script against the repo's own dashboard; every asset in this README is regenerable from source. A full write-up — the laziest way to keep your AI agents' skills honest, the 11 rules and the rug-pull threat model — lives on DEV: [SkillSentry on DEV](https://dev.to/ulk0r0/skillsentry-the-laziest-way-to-keep-your-ai-agents-skills-honest-253m).
 
 ## Threat model notes
 
