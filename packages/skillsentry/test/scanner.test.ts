@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import path from 'node:path';
+import os from 'node:os';
+import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { scanPaths, scanText, aggregateRisk, parseTarget, runStaticRules } from '../src/scanner.js';
+import { scanPaths, scanText, aggregateRisk, parseTarget, runStaticRules, MAX_FILE_BYTES } from '../src/scanner.js';
 import type { Finding } from '../src/types.js';
 
 const SAMPLES = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../samples');
@@ -133,4 +135,29 @@ describe('scanPaths over samples/', () => {
     expect(res.skipped).toContain('/definitely/missing/path');
     expect(lines.some((l) => l.includes('/definitely/missing/path') && l.startsWith('skipped'))).toBe(true);
   }, 30000);
+});
+
+describe('scanPaths resource guards', () => {
+  it('skips files beyond the size cap with an explicit reason, scanning the rest', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'skillsentry-cap-'));
+    try {
+      const big = path.join(dir, 'SKILL.md');
+      await fs.writeFile(big, Buffer.alloc(MAX_FILE_BYTES + 1));
+      const smallDir = path.join(dir, 'ok');
+      const small = path.join(smallDir, 'SKILL.md');
+      await fs.mkdir(smallDir, { recursive: true });
+      await fs.writeFile(small, '---\nname: ok\ndescription: Fine.\n---\nPlain body.');
+
+      const res = await scanPaths([dir], noAi);
+      expect(res.filesScanned).toBe(1);
+      expect(res.reports[0]?.path).toBe(small);
+      expect(res.skipped).toEqual([big]);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  it('the cap is generous enough for real skill documentation', () => {
+    expect(MAX_FILE_BYTES).toBeGreaterThanOrEqual(1024 * 1024);
+  });
 });

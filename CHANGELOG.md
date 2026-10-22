@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`mcpServers.<name>.other`) are scanned as agent-readable text again — a
   poisoned tool description is exactly where a smuggled collector URL
   hides.
+- **Scanner refuses unbounded files.** `scanPaths` re-stats every candidate
+  before reading and skips anything beyond a 2 MiB cap with an explicit
+  reason (exported as `MAX_FILE_BYTES`) — a swapped or pathological file
+  must not become a memory hazard for a local tool.
 
 ## [0.4.0] — 2026-10-21
 

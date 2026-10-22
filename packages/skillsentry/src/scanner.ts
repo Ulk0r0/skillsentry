@@ -22,6 +22,12 @@ import { assessWithAi, probeAi, DEFAULT_AI_BASE_URL, DEFAULT_MODEL } from './ai.
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.next', '.venv', 'coverage']);
 const MAX_FILES = 500;
 const MAX_MATCHES_PER_RULE = 12;
+// A SKILL.md or MCP config is documentation-scale. Anything far beyond that
+// (minified dumps, logs, accidental secret stores) is a memory hazard for a
+// local tool that reads everything it is pointed at — refuse it with an
+// explicit skip instead of buffering it whole. Exported so integrators can
+// mirror the same bound before handing strings to scanText.
+export const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
 // ------------------------------------------------------------ discovery ----
 
@@ -188,6 +194,20 @@ export async function scanPaths(inputs: string[], opts: ScanOptions = {}): Promi
   const reports: ScanReport[] = [];
   const scanStarted = Date.now();
   for (const file of files) {
+    // Re-stat before reading: collect ran a while ago, and a file swapped
+    // for a directory (or grown pathologically) must not crash or OOM the
+    // scan — it gets the same explicit skip treatment as missing inputs.
+    const st = await fs.stat(file).catch(() => null);
+    if (!st || !st.isFile()) {
+      skipped.push(file);
+      opts.log?.(`skipped (unreadable): ${file}`);
+      continue;
+    }
+    if (st.size > MAX_FILE_BYTES) {
+      skipped.push(file);
+      opts.log?.(`skipped (exceeds ${MAX_FILE_BYTES}-byte cap): ${file}`);
+      continue;
+    }
     let raw: string;
     try {
       raw = await fs.readFile(file, 'utf8');
