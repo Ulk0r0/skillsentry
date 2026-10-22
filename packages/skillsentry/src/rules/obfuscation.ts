@@ -4,8 +4,9 @@ import { evidenceFor, firstMatch, matches, squash } from '../util/text.js';
 
 /**
  * SS-005 — Obfuscated payloads and hidden channels: base64/hex blobs,
- * zero-width characters used to smuggle instructions past human review,
- * hidden HTML comments and "decode and execute" directives.
+ * unicode-escape and percent-encoding runs, String.fromCharCode payload
+ * arrays, zero-width characters used to smuggle instructions past human
+ * review, hidden HTML comments and "decode and execute" directives.
  */
 // Each code point in this class is an invisible formatting character on its
 // own (joiners, direction marks, soft hyphen, BOM) — not part of a composed
@@ -15,6 +16,14 @@ const ZERO_WIDTH = /[\u200B\u200C\u200D\u200E\u200F\u2060-\u2064\u206A-\u206F\uF
 
 const BASE64_BLOB = /\b[A-Za-z0-9+/]{80,}={0,2}\b/g;
 const HEX_BLOB = /\b(?:[0-9a-fA-F]{2}){40,}\b/g;
+// Encodings beyond base64/hex that still decode into commands an agent may
+// be talked into running: JS unicode-escape runs, long percent-encoded
+// strings and String.fromCharCode arrays. Thresholds sit far above what
+// ordinary documentation carries (a couple of %20 spaces, one \u00e9, a
+// two-character code demo) so the clean gallery stays clean.
+const UNICODE_ESCAPE_BLOB = /(?:\\u[0-9a-fA-F]{4}){12,}/g;
+const PERCENT_ENCODED_BLOB = /(?:%[0-9a-fA-F]{2}){16,}/g;
+const FROMCHARCODE_BLOB = /\bString\.fromCharCode\(\s*\d+(?:\s*,\s*\d+){15,}\s*\)/g;
 
 const DECODE_DIRECTIVE =
   /\b(?:decode|decipher|run|execute|eval|interpret)\b[^.\n]{0,60}\b(?:the\s+)?(?:following|above|this|next)?\s*(?:base64|b64|hex|rot13|encoded|payload|string|text)\b|\b(?:base64|atob|frombase64|rot13|eval)\b[^.\n]{0,40}\b(?:then|and)\s+(?:run|execute|eval|follow)\b/gi;
@@ -64,7 +73,7 @@ export const obfuscation: Rule = {
       });
     }
 
-    for (const re of [BASE64_BLOB, HEX_BLOB] as const) {
+    for (const re of [BASE64_BLOB, HEX_BLOB, UNICODE_ESCAPE_BLOB, PERCENT_ENCODED_BLOB, FROMCHARCODE_BLOB] as const) {
       const m = firstMatch(re, text);
       if (m && m.index !== undefined && !overlaps(m.index, m.index + m[0].length)) {
         reportedSpans.push({ start: m.index, end: m.index + m[0].length });

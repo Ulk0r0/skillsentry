@@ -7,7 +7,35 @@ import { evidenceFor, squash } from '../util/text.js';
  * A benign skill rarely needs a URL inside its description; inline URLs plus
  * "send/post/fetch" verbs are the signature of covert data flows.
  */
-const EXFIL_HOSTS = /(?:webhook\.site|requestbin\.[a-z]+|pipedream\.net|pastebin\.com|hastebin|transfer\.sh|file\.io|ngrok\.(?:io|app|dev)|\.trycloudflare\.com|beeceptor\.com|postb\.in|interact\.sh|oast\.(?:pro|fun|live))/i;
+// Request collectors, one-shot pastes, tunnels and chat-app/automation
+// webhooks — the infrastructure a smuggled URL points at when the payload is
+// data, not a download. Grouped and built from an array so additions come
+// with their category attached, and flagged on sight (critical).
+const EXFIL_HOSTS = new RegExp(
+  [
+    // throwaway request collectors / pastes
+    'webhook\\.site', 'requestbin\\.[a-z]+', 'pipedream\\.net',
+    'pastebin\\.com', 'hastebin', 'paste\\.ee', 'dpaste\\.com', 'termbin\\.com',
+    'transfer\\.sh', 'file\\.io',
+    // tunnels / ad-hoc public endpoints
+    'ngrok\\.(?:io|app|dev)', '\\.trycloudflare\\.com', 'serveo\\.net',
+    'localhost\\.run', 'localtunnel\\.me',
+    // classic external-interaction probing
+    'beeceptor\\.com', 'postb\\.in', 'interact\\.sh', 'oast\\.(?:pro|fun|live)',
+    // chat-app webhooks: the 2025-2026 default exfil channel
+    'discord(?:app)?\\.com/api/webhooks', 'cdn\\.discordapp\\.com/attachments',
+    '(?:canary|ptb)\\.discord\\.com/api/webhooks',
+    '(?:api\\.)?telegram\\.org/bot',
+    'hooks\\.slack\\.com/services/',
+    'ntfy\\.sh/',
+    // automation hooks and app-script collectors
+    'hooks\\.zapier\\.com/hooks/catch/', 'maker\\.ifttt\\.com/trigger/',
+    'script\\.google(?:usercontent)?\\.com/macros/',
+    // writable JSON stores used as dead-drop endpoints
+    'jsonbin\\.org', 'api\\.npoint\\.io', 'hookb\\.in'
+  ].join('|'),
+  'i'
+);
 
 const URL_RE = /\bhttps?:\/\/[^\s"'<>()[\]]{4,}/gi;
 
@@ -27,9 +55,14 @@ export const exfiltration: Rule = {
   run(surface) {
     const out: Array<{ evidence: string; note?: string; severity?: 'critical' | 'high' | 'low' | 'medium'; score?: number }> = [];
     const seen = new Set<string>();
-    // URLs in MCP config command lines are part of the declared setup, not
-    // smuggled text — only collector/raw-IP hosts are reportable there.
-    const isMcpConfigSurface = surface.location.startsWith('mcpServers.');
+    // URLs on the *declared connection* surfaces of an MCP config (the
+    // server entry's command/args/url, and its env) are part of the reviewed
+    // setup — only collector/raw-IP hosts are reportable there. Description,
+    // header and other free-text fields (`mcpServers.<name>.other`) stay
+    // plain agent-readable text: a poisoned tool description is exactly
+    // where a smuggled collector URL hides.
+    const isDeclaredSetup =
+      /^mcpServers\.[^.]+$/.test(surface.location) || surface.location.endsWith('.env');
     for (const m of surface.text.matchAll(URL_RE)) {
       const url = m[0];
       if (seen.has(url)) continue;
@@ -46,7 +79,7 @@ export const exfiltration: Rule = {
           severity: 'critical',
           score: 8.5
         });
-      } else if (isLocal || isMcpConfigSurface) {
+      } else if (isLocal || isDeclaredSetup) {
         continue; // localhost URLs in docs and MCP config command URLs are normal
       } else if (withVerb) {
         out.push({

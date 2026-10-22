@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **SS-002 — real-world exfiltration channels.** Discord (webhook API and CDN
+  attachments), Telegram bot API, Slack incoming hooks, ntfy.sh push topics,
+  Google Apps Script `script.google.com/macros`, Zapier/IFTTT hook
+  collectors, tunnel hosts (serveo.net, localhost.run, localtunnel.me) and
+  the paste.ee / dpaste.com / termbin.com family now flag as critical on
+  sight, alongside the existing request collectors.
+- **SS-005 — smuggled encodings beyond base64/hex.** Long unicode-escape
+  runs (`\uXXXX` ×12+), percent-encoded runs (×16+) and
+  `String.fromCharCode` payload arrays (16+ code points) are treated as
+  encoded blobs: critical with execution context nearby, medium otherwise.
+  Thresholds sit far above ordinary documentation so the clean gallery
+  stays clean.
+
+### Fixed
+- **SS-002 no longer skips MCP free-text fields.** URLs on declared
+  connection surfaces (`mcpServers.<name>` command/args/url and `.env`)
+  remain exempt as reviewed setup, but description/header fields
+  (`mcpServers.<name>.other`) are scanned as agent-readable text again — a
+  poisoned tool description is exactly where a smuggled collector URL
+  hides.
+
 ## [0.4.0] — 2026-10-21
 
 Detection breadth and governance release: two new static rules (RCE
