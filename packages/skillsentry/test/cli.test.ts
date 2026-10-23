@@ -96,3 +96,47 @@ describe('parseDiffArgs (skillsentry diff <old> <new>)', () => {
     expect(() => parseDiffArgs(['--wat', 'a', 'b'])).toThrow(CliError);
   });
 });
+
+describe('parseArgs — flag value requirements & new flags', () => {
+  it('--ai carries force semantics: skip the probe, attempt the endpoint anyway', () => {
+    const a = parseArgs(['--ai']);
+    expect(a.ai).toBe(true);
+    expect(a.aiForce).toBe(true);
+  });
+
+  it('a default invocation does not force the AI layer', () => {
+    const a = parseArgs(['.']);
+    expect(a.ai).toBe(true);
+    expect(a.aiForce).toBe(false);
+  });
+
+  it('--no-ai followed by --ai ends up forced-on (last flag wins, honestly)', () => {
+    const a = parseArgs(['--no-ai', '--ai']);
+    expect(a.ai).toBe(true);
+    expect(a.aiForce).toBe(true);
+  });
+
+  it('--stdin parses alone but rejects paths', () => {
+    expect(parseArgs(['--stdin']).stdin).toBe(true);
+    expect(() => parseArgs(['--stdin', 'skills/'])).toThrow(CliError);
+  });
+
+  it('diff rejects --stdin (it compares two snapshot paths)', () => {
+    expect(() => parseDiffArgs(['--stdin', 'a', 'b'])).toThrow(CliError);
+  });
+
+  it('value-taking flags fail loudly on a missing value instead of silently defaulting', () => {
+    expect(() => parseArgs(['--model'])).toThrow(CliError);
+    expect(() => parseArgs(['--model', ''])).toThrow(CliError);
+    expect(() => parseArgs(['--ollama-url'])).toThrow(CliError);
+    expect(() => parseArgs(['--ollama-url', ''])).toThrow(CliError);
+    expect(() => parseArgs(['--ai-timeout'])).toThrow(CliError);
+    expect(() => parseArgs(['--fail-on'])).toThrow(CliError);
+    expect(() => parseDiffArgs(['--model'])).toThrow(CliError);
+    expect(() => parseDiffArgs(['--fail-on'])).toThrow(CliError);
+    // valid values still parse
+    expect(parseArgs(['--model', 'gemma3:4b']).model).toBe('gemma3:4b');
+    expect(parseArgs(['--ollama-url', 'http://localhost:1234/v1']).aiBaseUrl).toBe('http://localhost:1234/v1');
+    expect(parseArgs(['--fail-on', 'low']).failOn).toBe('low');
+  });
+});

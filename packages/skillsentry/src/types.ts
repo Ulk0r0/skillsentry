@@ -120,6 +120,9 @@ export interface ScanResult {
 export interface ScanOptions {
   /** Force the AI layer on/off. Default: on when a local runtime answers. */
   ai?: boolean;
+  /** Bypass the 1.5s probe and attempt the AI layer regardless — per-file
+   *  failures degrade to `aiError`, never crash the scan. */
+  aiForce?: boolean;
   /** OpenAI-compatible endpoint (llama.cpp server, LM Studio, vLLM...). */
   openaiBaseUrl?: string;
   /** Model identifier, e.g. "llama3.2:3b" (Ollama) — open-weight models. */

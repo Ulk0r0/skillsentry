@@ -137,6 +137,42 @@ describe('scanPaths over samples/', () => {
   }, 30000);
 });
 
+describe('scanPaths AI force semantics', () => {
+  const dead = 'http://127.0.0.1:9/v1'; // port 9 (discard): nothing listens, instant refusal
+
+  async function oneSkillDir(prefix: string): Promise<string> {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+    await fs.writeFile(path.join(dir, 'SKILL.md'), '---\nname: ok\ndescription: Fine.\n---\nPlain body.');
+    return dir;
+  }
+
+  it('aiForce bypasses the probe and attempts the layer anyway — failures become per-file aiError', async () => {
+    const dir = await oneSkillDir('skillsentry-force-');
+    try {
+      const res = await scanPaths([dir], { ai: true, aiForce: true, openaiBaseUrl: dead, aiTimeoutMs: 1500 });
+      expect(res.filesScanned).toBe(1);
+      expect(res.aiUsed).toBe(false);
+      expect(res.reports[0]?.ai).toBeNull();
+      expect(res.reports[0]?.aiError).toBeDefined();
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  it('without force, a failed probe short-circuits: static-only, no aiError, no wasted attempts', async () => {
+    const dir = await oneSkillDir('skillsentry-probe-');
+    try {
+      const res = await scanPaths([dir], { ai: true, openaiBaseUrl: dead, aiTimeoutMs: 1500 });
+      expect(res.filesScanned).toBe(1);
+      expect(res.aiUsed).toBe(false);
+      expect(res.reports[0]?.ai).toBeNull();
+      expect(res.reports[0]?.aiError).toBeUndefined();
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  }, 30000);
+});
+
 describe('scanPaths resource guards', () => {
   it('skips files beyond the size cap with an explicit reason, scanning the rest', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'skillsentry-cap-'));

@@ -185,9 +185,16 @@ export async function scanPaths(inputs: string[], opts: ScanOptions = {}): Promi
 
   let aiAvailable = false;
   if (opts.ai !== false && files.length > 0) {
-    aiAvailable = await probeAi(opts.openaiBaseUrl ?? DEFAULT_AI_BASE_URL);
-    if (!aiAvailable) {
-      opts.log?.(`no local OpenAI-compatible runtime at ${opts.openaiBaseUrl ?? DEFAULT_AI_BASE_URL} — static-only scan`);
+    if (opts.aiForce) {
+      // --ai means intent: skip the 1.5s probe gate and let assessWithAi try.
+      // A dead endpoint still degrades gracefully (per-file aiError), it just
+      // costs the per-target timeout instead of a fast probe refusal.
+      aiAvailable = true;
+    } else {
+      aiAvailable = await probeAi(opts.openaiBaseUrl ?? DEFAULT_AI_BASE_URL);
+      if (!aiAvailable) {
+        opts.log?.(`no local OpenAI-compatible runtime at ${opts.openaiBaseUrl ?? DEFAULT_AI_BASE_URL} — static-only scan`);
+      }
     }
   }
 

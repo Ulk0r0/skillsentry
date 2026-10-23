@@ -11,7 +11,7 @@
  *   skillsentry . --no-ai                  static rules only
  *   skillsentry . --model llama3.2:3b      pick another open-weight model
  */
-import { scanPaths } from './scanner.js';
+import { scanPaths, scanText, MAX_FILE_BYTES } from './scanner.js';
 import { renderTerminal, renderMarkdown, renderJson, exitCodeFor } from './report.js';
 import { renderSarif } from './report-sarif.js';
 import {
@@ -21,7 +21,7 @@ import {
   renderDiffJson
 } from './diff.js';
 import { DEFAULT_AI_BASE_URL, DEFAULT_MODEL } from './ai.js';
-import type { Severity } from './types.js';
+import type { ScanResult, Severity } from './types.js';
 import { SEVERITY_ORDER } from './types.js';
 import { createRequire } from 'node:module';
 import { realpathSync, writeSync } from 'node:fs';
@@ -34,10 +34,13 @@ interface CliArgs {
   sarif: boolean;
   failOn: Severity;
   ai: boolean;
+  /** --ai: skip the probe and attempt the AI layer regardless. */
+  aiForce: boolean;
   aiBaseUrl?: string;
   model?: string;
   aiTimeoutMs?: number;
   verbose: boolean;
+  stdin: boolean;
 }
 
 /** Usage error thrown by parseArgs; main() converts it to exit code 2. */
@@ -66,14 +69,21 @@ OPTIONS
   --sarif              SARIF 2.1.0 output (GitHub Code Scanning ready)
   --fail-on <sev>      exit 1 if findings at/above severity (info|low|medium|high|critical). Default: high
   --no-ai              skip the open-weight model layer (static rules only)
-  --ai                 force the AI layer even if the probe is slow
+  --ai                 force the AI layer: skip the probe and try the endpoint anyway (failures degrade to aiError)
   --ollama-url <url>   OpenAI-compatible base URL. Default: ${DEFAULT_AI_BASE_URL}
   --model <id>         open-weight model id. Default: ${DEFAULT_MODEL}
   --ai-timeout <ms>    per-target AI timeout (default 20000)
+  --stdin              read ONE document from stdin instead of scanning paths (takes no paths)
   --verbose            diagnostics to stderr
   --no-color           disable ANSI colors
   -h, --help           this help
   -V, --version        version
+
+EXIT CODES
+  0  scanned and nothing at/above --fail-on
+  1  findings at/above --fail-on (or the diff introduced them)
+  2  usage error — or NOTHING was scanned (every input path was missing,
+     unreadable or not a candidate; a scan of nothing must not pass)
 
 DIFF (rug-pull detection)
   skillsentry diff ~/skills-backup/ ~/.claude/skills/ --fail-on high
@@ -87,6 +97,7 @@ EXAMPLES
   skillsentry . --sarif > results.sarif  # upload to GitHub Code Scanning
   skillsentry . --fail-on medium         # CI gate at medium
   skillsentry . --no-ai                  # deterministic offline mode
+  cat SKILL.md | skillsentry --stdin     # scan a piped document
 `;
 
 const DIFF_USAGE = `skillsentry diff <old> <new> — compare two snapshots and report what changed.
@@ -106,10 +117,12 @@ export function parseArgs(argv: string[]): CliArgs {
     sarif: false,
     failOn: 'high',
     ai: true,
+    aiForce: false,
     aiBaseUrl: undefined,
     model: undefined,
     aiTimeoutMs: undefined,
-    verbose: false
+    verbose: false,
+    stdin: false
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -119,7 +132,8 @@ export function parseArgs(argv: string[]): CliArgs {
       case '--md': case '--markdown': args.md = true; break;
       case '--sarif': args.sarif = true; break;
       case '--fail-on': {
-        const v = argv[++i] ?? '';
+        const v = argv[++i];
+        if (v === undefined || v === '') throw new CliError('--fail-on requires a value (info|low|medium|high|critical)');
         if (!SEVERITY_ORDER.includes(v as Severity)) {
           throw new CliError(`--fail-on must be one of ${SEVERITY_ORDER.join('|')}`);
         }
@@ -127,17 +141,33 @@ export function parseArgs(argv: string[]): CliArgs {
         break;
       }
       case '--no-ai': args.ai = false; break;
-      case '--ai': args.ai = true; break;
-      case '--ollama-url': case '--ai-url': case '--openai-base-url': args.aiBaseUrl = argv[++i] ?? undefined; break;
-      case '--model': args.model = argv[++i] ?? undefined; break;
+      case '--ai':
+        args.ai = true;
+        args.aiForce = true;
+        break;
+      case '--ollama-url': case '--ai-url': case '--openai-base-url': {
+        const v = argv[++i];
+        if (v === undefined || v === '') throw new CliError('--ollama-url requires a value');
+        args.aiBaseUrl = v;
+        break;
+      }
+      case '--model': {
+        const v = argv[++i];
+        if (v === undefined || v === '') throw new CliError('--model requires a value');
+        args.model = v;
+        break;
+      }
       case '--ai-timeout': {
-        const n = Number(argv[++i] ?? 20000);
+        const v = argv[++i];
+        if (v === undefined || v === '') throw new CliError('--ai-timeout requires a value (milliseconds)');
+        const n = Number(v);
         // A NaN/0/negative timeout would arm an AbortController that fires
         // instantly, silently breaking the AI layer.
         if (!Number.isFinite(n) || n <= 0) throw new CliError('--ai-timeout must be a positive number of milliseconds');
         args.aiTimeoutMs = n;
         break;
       }
+      case '--stdin': args.stdin = true; break;
       case '--verbose': args.verbose = true; break;
       case '--no-color': process.env.NO_COLOR = '1'; break;
       case '-h': case '--help': { writeSync(1, USAGE); process.exit(0); break; }
@@ -147,7 +177,10 @@ export function parseArgs(argv: string[]): CliArgs {
         args.paths.push(a);
     }
   }
-  if (args.paths.length === 0) args.paths.push('.');
+  if (args.stdin && args.paths.length > 0) {
+    throw new CliError('--stdin reads one document from stdin and takes no paths');
+  }
+  if (!args.stdin && args.paths.length === 0) args.paths.push('.');
   const formats = [args.json, args.md, args.sarif].filter(Boolean).length;
   if (formats > 1) throw new CliError('choose a single output format: --json, --md or --sarif');
   return args;
@@ -165,6 +198,7 @@ export interface DiffArgs {
   json: boolean;
   failOn: Severity;
   ai: boolean;
+  aiForce: boolean;
   aiBaseUrl?: string;
   model?: string;
   aiTimeoutMs?: number;
@@ -183,6 +217,7 @@ export function parseDiffArgs(argv: string[]): DiffArgs {
     json: false,
     failOn: 'high',
     ai: true,
+    aiForce: false,
     aiBaseUrl: undefined,
     model: undefined,
     aiTimeoutMs: undefined,
@@ -197,7 +232,8 @@ export function parseDiffArgs(argv: string[]): DiffArgs {
       case '--md': case '--markdown': case '--sarif':
         throw new CliError('diff supports --json only (diff of --md/--sarif is not defined)');
       case '--fail-on': {
-        const v = argv[++i] ?? '';
+        const v = argv[++i];
+        if (v === undefined || v === '') throw new CliError('--fail-on requires a value (info|low|medium|high|critical)');
         if (!SEVERITY_ORDER.includes(v as Severity)) {
           throw new CliError(`--fail-on must be one of ${SEVERITY_ORDER.join('|')}`);
         }
@@ -205,15 +241,29 @@ export function parseDiffArgs(argv: string[]): DiffArgs {
         break;
       }
       case '--no-ai': args.ai = false; break;
-      case '--ai': args.ai = true; break;
-      case '--ollama-url': case '--ai-url': case '--openai-base-url': args.aiBaseUrl = argv[++i] ?? undefined; break;
-      case '--model': args.model = argv[++i] ?? undefined; break;
+      case '--ai': args.ai = true; args.aiForce = true; break;
+      case '--ollama-url': case '--ai-url': case '--openai-base-url': {
+        const v = argv[++i];
+        if (v === undefined || v === '') throw new CliError('--ollama-url requires a value');
+        args.aiBaseUrl = v;
+        break;
+      }
+      case '--model': {
+        const v = argv[++i];
+        if (v === undefined || v === '') throw new CliError('--model requires a value');
+        args.model = v;
+        break;
+      }
       case '--ai-timeout': {
-        const n = Number(argv[++i] ?? 20000);
+        const v = argv[++i];
+        if (v === undefined || v === '') throw new CliError('--ai-timeout requires a value (milliseconds)');
+        const n = Number(v);
         if (!Number.isFinite(n) || n <= 0) throw new CliError('--ai-timeout must be a positive number of milliseconds');
         args.aiTimeoutMs = n;
         break;
       }
+      case '--stdin':
+        throw new CliError('--stdin is not supported by diff (it compares two snapshot paths)');
       case '--verbose': args.verbose = true; break;
       case '--no-color': process.env.NO_COLOR = '1'; break;
       default:
@@ -239,6 +289,7 @@ async function diffMain(argv: string[]): Promise<void> {
   const log = d.verbose ? (m: string) => process.stderr.write(`${m}\n`) : undefined;
   const scanOpts = {
     ai: d.ai,
+    aiForce: d.aiForce,
     openaiBaseUrl: d.aiBaseUrl,
     model: d.model,
     aiTimeoutMs: d.aiTimeoutMs,
@@ -269,15 +320,60 @@ async function main(): Promise<void> {
   }
   const log = args.verbose ? (m: string) => process.stderr.write(`${m}\n`) : undefined;
 
-  const result = await scanPaths(args.paths, {
-    ai: args.ai,
-    openaiBaseUrl: args.aiBaseUrl,
-    model: args.model,
-    aiTimeoutMs: args.aiTimeoutMs,
-    failOn: args.failOn,
-    log
-  });
+  let result: ScanResult;
+  if (args.stdin) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+    const raw = Buffer.concat(chunks).toString('utf8');
+    if (Buffer.byteLength(raw, 'utf8') > MAX_FILE_BYTES) {
+      fail(`stdin payload exceeds the ${MAX_FILE_BYTES}-byte cap — scan a file instead`);
+    }
+    if (raw.trim().length === 0) {
+      fail('stdin was empty — nothing to scan (pipe a SKILL.md or MCP config)');
+    }
+    const report = await scanText('stdin', raw, {
+      ai: args.ai,
+      aiForce: args.aiForce,
+      openaiBaseUrl: args.aiBaseUrl,
+      model: args.model,
+      aiTimeoutMs: args.aiTimeoutMs,
+      failOn: args.failOn,
+      log
+    });
+    result = {
+      reports: [report],
+      filesScanned: 1,
+      skipped: [],
+      aiUsed: report.ai !== null,
+      durationTotalMs: report.durationMs
+    };
+  } else {
+    result = await scanPaths(args.paths, {
+      ai: args.ai,
+      aiForce: args.aiForce,
+      openaiBaseUrl: args.aiBaseUrl,
+      model: args.model,
+      aiTimeoutMs: args.aiTimeoutMs,
+      failOn: args.failOn,
+      log
+    });
+  }
 
+  emit(result, args);
+
+  // Never call process.exit() after writing a large payload to stdout — it
+  // truncates pending pipe writes. Set the exit code and exit naturally.
+  if (result.filesScanned === 0) {
+    // A scanner that reports success while scanning nothing is a CI footgun:
+    // a typo'd path would turn every workflow green with zero coverage.
+    process.stderr.write('skillsentry: nothing was scanned — every input path was missing, unreadable or not a SKILL.md/MCP config candidate. Refusing to pass a scan of nothing.\n');
+    process.exitCode = 2;
+  } else {
+    process.exitCode = exitCodeFor(result, args.failOn);
+  }
+}
+
+function emit(result: ScanResult, args: CliArgs): void {
   if (args.json) {
     process.stdout.write(renderJson(result) + '\n');
   } else if (args.md) {
@@ -287,10 +383,6 @@ async function main(): Promise<void> {
   } else {
     process.stdout.write(renderTerminal(result));
   }
-
-  // Never call process.exit() after writing a large payload to stdout — it
-  // truncates pending pipe writes. Set the exit code and exit naturally.
-  process.exitCode = exitCodeFor(result, args.failOn);
 }
 
 // Only auto-run when this file IS the process entry (direct `node cli.js` or
