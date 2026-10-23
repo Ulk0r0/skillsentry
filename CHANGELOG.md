@@ -5,7 +5,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] — 2026-10-23
+
+Ship-it-to-CI release: an official GitHub Action, stdin mode, and three
+honesty fixes to the CLI contract (exit codes, the `--ai` flag, flag value
+validation). Still 11 rules and zero runtime dependencies; tests 127 → 143.
 
 ### Added
 - **SS-002 — real-world exfiltration channels.** Discord (webhook API and CDN
@@ -20,6 +24,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   encoded blobs: critical with execution context nearby, medium otherwise.
   Thresholds sit far above ordinary documentation so the clean gallery
   stays clean.
+- **GitHub Action (composite, zero setup).** `uses: Ulk0r0/skillsentry@v0.5.0`
+  with `paths`, `fail-on`, `sarif`, `no-ai`, `model`, `ollama-url` inputs.
+  Builds the core from source on the runner in ~2s (scoped install from the
+  lockfile — dashboard dependencies excluded) and gates the job on the CLI
+  exit code. `sarif:` pairs with `github/codeql-action/upload-sarif@v3` for
+  the Security tab.
+- **`--stdin` mode.** `cat SKILL.md | skillsentry --stdin` scans one piped
+  document (cap-enforced at `MAX_FILE_BYTES`, takes no paths, rejected by
+  `diff`) — enables git hooks, pipe-based checks and editor integrations.
+
+### Changed
+- **`--ai` now means what it says.** It sets `ScanOptions.aiForce`: the 1.5s
+  probe gate is skipped and the OpenAI-compatible endpoint is attempted
+  regardless — dead endpoints degrade to per-file `aiError` instead of
+  silently static-only. Previously the flag was indistinguishable from the
+  default behavior; the help text promised forcing that never happened.
+- **Value-taking flags fail loudly.** `--model`, `--ollama-url`,
+  `--ai-timeout` and `--fail-on` with a missing or empty value exit 2 with
+  a clear message instead of silently falling back to defaults — a dropped
+  argument must not change the scan configuration invisibly.
 
 ### Fixed
 - **SS-002 no longer skips MCP free-text fields.** URLs on declared
@@ -32,6 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before reading and skips anything beyond a 2 MiB cap with an explicit
   reason (exported as `MAX_FILE_BYTES`) — a swapped or pathological file
   must not become a memory hazard for a local tool.
+- **A scan of nothing can no longer pass.** When every input path is
+  missing, unreadable or not a candidate (`filesScanned === 0`), the CLI
+  exits 2 with an explicit stderr note — previously it exited 0 with the
+  skipped list only visible in `--json`, so a typo'd CI path turned
+  workflows green while scanning zero files.
 
 ## [0.4.0] — 2026-10-21
 
