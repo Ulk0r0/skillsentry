@@ -1,0 +1,77 @@
+name: 'SkillSentry'
+description: >
+  Local-first security scan for AI agent skills (SKILL.md) and MCP server
+  configs. 11 static rules mapped to OWASP LLM/AST10/MCP Top 10, optional
+  open-weight model review. Fails the job when findings reach the threshold.
+
+branding:
+  icon: 'shield'
+  color: 'purple'
+
+inputs:
+  paths:
+    description: 'Space-separated files or directories to scan.'
+    required: false
+    default: '.'
+  fail-on:
+    description: 'Exit 1 when findings are at/above this severity: info|low|medium|high|critical.'
+    required: false
+    default: 'high'
+  sarif:
+    description: 'Write a SARIF 2.1.0 report to this file (GitHub Code Scanning ready). Empty disables.'
+    required: false
+    default: ''
+  no-ai:
+    description: 'Static rules only — deterministic and offline, recommended in CI. true|false.'
+    required: false
+    default: 'true'
+  model:
+    description: 'Open-weight model id for the AI layer (needs an OpenAI-compatible runtime reachable from the runner).'
+    required: false
+    default: ''
+  ollama-url:
+    description: 'OpenAI-compatible base URL for the AI layer.'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    # The repo ships source, not dist/ (gitignored) — build the core once.
+    # Scoped install: root + packages/skillsentry only, the Next.js dashboard
+    # is irrelevant on a CI runner (measured ~2s from the lockfile).
+    - name: Build SkillSentry
+      shell: bash
+      run: |
+        cd "$GITHUB_ACTION_PATH"
+        npm ci --no-audit --no-fund --workspace packages/skillsentry
+        npm run build --workspace packages/skillsentry
+
+    # Exit codes ARE the gate: 0 clean under threshold, 1 findings at/above,
+    # 2 usage error or nothing scanned (a typo'd path cannot pass silently).
+    - name: Scan
+      shell: bash
+      run: |
+        set -euo pipefail
+        CLI="$GITHUB_ACTION_PATH/packages/skillsentry/dist/cli.js"
+        ARGS=(--fail-on "${{ inputs.fail-on }}")
+        if [ "${{ inputs.no-ai }}" != "false" ]; then
+          ARGS+=(--no-ai)
+        fi
+        if [ -n "${{ inputs.model }}" ]; then
+          ARGS+=(--model "${{ inputs.model }}")
+        fi
+        if [ -n "${{ inputs.ollama-url }}" ]; then
+          ARGS+=(--ollama-url "${{ inputs.ollama-url }}")
+        fi
+        if [ -n "${{ inputs.sarif }}" ]; then
+          # shellcheck disable=SC2086 — paths is intentionally word-split
+          node "$CLI" ${{ inputs.paths }} "${ARGS[@]}" --sarif > "${{ inputs.sarif }}"
+        else
+          # shellcheck disable=SC2086
+          node "$CLI" ${{ inputs.paths }} "${ARGS[@]}"
+        fi

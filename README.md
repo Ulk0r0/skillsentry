@@ -57,6 +57,9 @@ npx skillsentry . --model llama3.2:3b
 # rug-pull check: did an updated skill turn poisonous since the backup?
 npx skillsentry diff ~/skills-backup/ ~/.claude/skills/ --fail-on high
 
+# scan one piped document (git hooks, ad-hoc checks)
+cat SKILL.md | npx skillsentry --stdin --fail-on high
+
 # SARIF 2.1.0 for GitHub Code Scanning
 npx skillsentry . --sarif > skillsentry.sarif
 ```
@@ -159,12 +162,40 @@ npm run dev:dashboard    # http://localhost:3210
 
 ## Use in CI
 
+### GitHub Action (zero setup)
+
+```yaml
+- uses: Ulk0r0/skillsentry@v0.5.0
+  with:
+    paths: .            # space-separated files or directories
+    fail-on: high       # info|low|medium|high|critical
+    # sarif: skillsentry.sarif   # optional SARIF for the Security tab
+```
+
+The action builds the scanner from source in ~2s (composite, Node 22), runs
+with `--no-ai` by default (deterministic, offline) and fails the job on
+findings at/above the threshold. With `sarif:` set, pair it with
+`github/codeql-action/upload-sarif@v3` to surface findings in the Security
+tab:
+
+```yaml
+- uses: Ulk0r0/skillsentry@v0.5.0
+  with:
+    paths: .
+    sarif: skillsentry.sarif
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: skillsentry.sarif
+```
+
+### CLI (any runner)
+
 ```yaml
 - name: Scan agent skills
   run: npx skillsentry . --json --fail-on high
 ```
 
-Exit codes: `0` clean under threshold, `1` findings at/above `--fail-on`, `2` usage error. Default threshold: `high`.
+Exit codes: `0` clean under threshold, `1` findings at/above `--fail-on`, `2` usage error — or a scan of *nothing* (every input path missing or not a candidate; a typo'd CI path can never pass silently). Default threshold: `high`.
 
 Upload findings to GitHub's Security tab with SARIF — this is exactly what SkillSentry's own CI does ([ci.yml](.github/workflows/ci.yml) generates `skillsentry.sarif` over `packages/` + `apps/` and uploads it via `upload-sarif@v3`, so any poisoned instruction that ever lands in the scanner's own source becomes a visible GitHub alert):
 
