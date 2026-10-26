@@ -60,6 +60,10 @@ npx skillsentry diff ~/skills-backup/ ~/.claude/skills/ --fail-on high
 # scan one piped document (git hooks, ad-hoc checks)
 cat SKILL.md | npx skillsentry --stdin --fail-on high
 
+# stdin also takes MCP configs: JSON with an `mcpServers` key is routed to
+# the structured parser, so the full mcp-config rule set applies
+cat claude_desktop_config.json | npx skillsentry --stdin --fail-on high
+
 # SARIF 2.1.0 for GitHub Code Scanning
 npx skillsentry . --sarif > skillsentry.sarif
 ```

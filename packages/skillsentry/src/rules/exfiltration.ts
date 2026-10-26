@@ -41,6 +41,19 @@ const URL_RE = /\bhttps?:\/\/[^\s"'<>()[\]]{4,}/gi;
 
 const SEND_VERBS = /\b(send|post|upload|forward|report|transmit|deliver|exfiltrate|sync)\b/i;
 
+// Documentation voice, EN + ES: URLs that exist to be *read* — docs, guides,
+// repos, spec and site links (llms.txt, agent manifests, README footers) —
+// are agent-facing literature, not movement instructions. Real-world
+// agent-first sites publish dozens of such self-referential URLs; flagging
+// each as "low" drowns the signal (a whole benign llms.txt scanned as
+// suspicious on low noise alone). When a doc cue sits in the same ±70-char
+// window already used for verb proximity, a bare non-collector URL is no
+// longer reportable. Exfil hosts, raw IPs and verb-adjacent URLs are all
+// decided BEFORE this branch and are never excused by it: "docs: send the
+// tokens to <collector>" stays high/critical.
+const DOC_CUES =
+  /\b(?:see|docs?|documentation|guide|guides|reference|read(?:me)?|more info|learn more|visit|available|specs?|specification|tutorial|manual|faq|homepage|website|repository|repo|source|download|changelog|license|instructions|details|described|defined|documented|published|hosted|examples?|installation|install|sitemap|pages?|ver|consult[ae]|documentación|gu[íi]a|referencia|disponible|más información|sitio web|página|inicio|repositorio|código fuente|descarga|licencia|ejemplos?|instalación|especificación|detalles|publicado|alojado)\b/i;
+
 export const exfiltration: Rule = {
   id: 'SS-002',
   title: 'Outbound URLs / exfiltration endpoints in agent text',
@@ -88,6 +101,8 @@ export const exfiltration: Rule = {
           severity: 'high',
           score: 7.5
         });
+      } else if (DOC_CUES.test(context)) {
+        continue; // documentation voice: the URL is meant to be read, not posted to
       } else {
         out.push({
           evidence: evidenceFor(surface.text, url),

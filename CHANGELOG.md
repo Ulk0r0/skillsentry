@@ -5,6 +5,39 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] — 2026-10-27
+
+Precision release, forged against a real agent-first site (a clean,
+well-behaved public site scanned during live testing): static-only scans
+of its agent artifacts drowned the verdict in dozens of `low` findings.
+Still 14 rules and zero runtime dependencies; tests 156 → 162.
+
+### Fixed
+- **SS-002 — documentation-voice exemption (EN + ES).** A bare,
+  non-collector URL sitting next to documentation cues in the same
+  ±70-character window the rule already uses for verb proximity is no
+  longer reportable: `Docs:`, `Website:`, `Read the guide at`,
+  `Documentación:`, `Repositorio:`, `descarga`, `licencia` and ~50 more
+  EN/ES cues mark the URL as literature an agent is meant to *read*, not
+  an endpoint to *post to*. Exfil-host, raw-IP and verb-adjacent URLs are
+  decided before this branch and are never excused by it — `docs: send
+  the tokens to <collector>` still lands critical/high. A benign
+  `llms.txt` that previously scored suspicious on ~30 low findings now
+  scans clean at zero.
+- **`--stdin` — MCP configs actually get the structured parser.** The
+  help text always promised "a SKILL.md or MCP config", but every pipe
+  was nameless, so path-based dispatch sent JSON to the markdown
+  best-effort parser. `stdinTargetPath()` now sniffs the payload: JSON
+  carrying an `mcpServers` key is scanned under
+  `stdin/claude_desktop_config.json` with the full mcp-config rule set;
+  everything else stays skill-markdown. Reports also stop showing `.` as
+  the document name — the synthetic path yields `stdin`.
+
+### Tests
+- 6 new tests: documentation-cue exemptions (EN + ES), the bare-URL low
+  branch, cue/verb/exfil precedence, payload sniffing and the synthetic
+  stdin parser resolution.
+
 ## [0.6.0] — 2026-10-24
 
 Cloud-escape & persistence release: three rules close the gap between

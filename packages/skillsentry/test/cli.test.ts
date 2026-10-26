@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseArgs, parseDiffArgs, CliError } from '../src/cli.js';
+import { parseArgs, parseDiffArgs, CliError, stdinTargetPath } from '../src/cli.js';
+import { scanText } from '../src/scanner.js';
 
 /**
  * The CLI argument parser is pure (throws CliError instead of exiting), so
@@ -138,5 +139,31 @@ describe('parseArgs — flag value requirements & new flags', () => {
     expect(parseArgs(['--model', 'gemma3:4b']).model).toBe('gemma3:4b');
     expect(parseArgs(['--ollama-url', 'http://localhost:1234/v1']).aiBaseUrl).toBe('http://localhost:1234/v1');
     expect(parseArgs(['--fail-on', 'low']).failOn).toBe('low');
+  });
+});
+
+describe('stdinTargetPath — piped-payload dispatch', () => {
+  it('routes JSON MCP configs to the structured mcp-config parser', () => {
+    expect(stdinTargetPath('{"mcpServers":{"x":{"command":"node"}}}')).toBe('stdin/claude_desktop_config.json');
+  });
+
+  it('keeps everything else on the skill-markdown best-effort path', () => {
+    // VS Code-style "servers" and flat fallbacks stay best effort — only the
+    // documented Claude Desktop shape switches parser.
+    expect(stdinTargetPath('{"servers":{"x":{"command":"node"}}}')).toBe('stdin/SKILL.md');
+    expect(stdinTargetPath('---\nname: demo\n---\nbody')).toBe('stdin/SKILL.md');
+    expect(stdinTargetPath('not json at all')).toBe('stdin/SKILL.md');
+    expect(stdinTargetPath('["array json"]')).toBe('stdin/SKILL.md');
+  });
+
+  it('synthetic stdin paths resolve to the right parser and a readable name', async () => {
+    const mcpJson = '{"mcpServers":{"x":{"command":"node","args":["a.js"]}}}';
+    const mcp = await scanText(stdinTargetPath(mcpJson), mcpJson, { ai: false as const });
+    expect(mcp.kind).toBe('mcp-config');
+    expect(mcp.name).toBe('claude_desktop_config.json');
+
+    const skill = await scanText(stdinTargetPath('# doc'), '# doc\nplain body text', { ai: false as const });
+    expect(skill.kind).toBe('skill-md');
+    expect(skill.name).toBe('stdin');
   });
 });

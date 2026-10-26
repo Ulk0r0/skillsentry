@@ -1,6 +1,6 @@
 {
   "name": "skillsentry",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Local-first security scanner for AI agent skills (SKILL.md) and MCP server configs. Static rules + open-weight model analysis, zero runtime dependencies.",
   "type": "module",
   "license": "MIT",

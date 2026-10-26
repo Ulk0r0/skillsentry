@@ -186,6 +186,27 @@ export function parseArgs(argv: string[]): CliArgs {
   return args;
 }
 
+/**
+ * Exported (pure) for tests: pick the synthetic path a piped document is
+ * scanned under. The help text promises "a SKILL.md or MCP config" over
+ * stdin, so JSON payloads carrying an `mcpServers` key must reach the
+ * structured mcp-config parser and its rule set — path-based dispatch alone
+ * could never deliver that (every pipe is nameless). The synthetic path also
+ * gives reports a readable name ('stdin') instead of the '.' that
+ * basename(dirname('stdin')) produced before.
+ */
+export function stdinTargetPath(raw: string): string {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) && 'mcpServers' in parsed) {
+      return 'stdin/claude_desktop_config.json';
+    }
+  } catch {
+    // not JSON — skill-markdown best effort
+  }
+  return 'stdin/SKILL.md';
+}
+
 function fail(msg: string): never {
   process.stderr.write(`skillsentry: ${msg}\n`);
   process.exit(2);
@@ -331,7 +352,7 @@ async function main(): Promise<void> {
     if (raw.trim().length === 0) {
       fail('stdin was empty — nothing to scan (pipe a SKILL.md or MCP config)');
     }
-    const report = await scanText('stdin', raw, {
+    const report = await scanText(stdinTargetPath(raw), raw, {
       ai: args.ai,
       aiForce: args.aiForce,
       openaiBaseUrl: args.aiBaseUrl,
