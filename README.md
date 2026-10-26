@@ -16,7 +16,7 @@ Agents read text to decide what to do: `SKILL.md` files, tool descriptions, MCP 
 
 SkillSentry is a scanner that treats agent-readable text as an attack surface:
 
-- **11 deterministic static rules** (SS-001…SS-011) for the known poisoning patterns — hidden `<IMPORTANT>` directives, exfiltration endpoints, credential paths, destructive commands, base64-smuggled payloads, tool shadowing, surveillance behavior, insecure MCP configs, deceptive metadata, remote-code-execution one-liners, and typosquatted installs.
+- **14 deterministic static rules** (SS-001…SS-014) for the known poisoning patterns — hidden `<IMPORTANT>` directives, exfiltration endpoints, credential paths, destructive commands, base64-smuggled payloads, tool shadowing, surveillance behavior, insecure MCP configs, deceptive metadata, remote-code-execution one-liners, typosquatted installs, cloud-metadata credential theft, startup persistence, and self-propagating config edits.
 - **An open-weight semantic layer**: a local model (Ollama with Gemma by default, or any OpenAI-compatible runtime — llama.cpp, LM Studio, vLLM) reviews the *intent* of the text and catches what regexes miss. If no local runtime is running, the scan degrades gracefully to static-only. **Nothing ever leaves your machine.**
 - **Every finding is mapped** to [OWASP LLM Top 10 (2026)](https://genai.owasp.org/Top-10-2026/), [OWASP Agentic Skills Top 10](https://github.com/OWASP/www-project-agentic-skills-top-10) and the [OWASP MCP Top 10](https://github.com/OWASP-MCP-Governance-and-Risk-Project/docs), with severity, evidence and remediation.
 - **Zero runtime dependencies.** A security tool that ships 500 transitive deps would be ironic. SkillSentry ships none.
@@ -124,6 +124,9 @@ Note the secret in the evidence: `sk-ant…<redacted 37 chars>`. **SkillSentry n
 | SS-009 | Deceptive metadata | "read-only" claims contradicted by write evidence, self-attested "official/verified" authority | medium |
 | SS-010 | Remote-code-execution one-liners | `curl \| bash`, `iwr \| iex`, `bash <(curl …)`, download + `chmod +x` staging, `eval` of base64-decoded payloads | critical |
 | SS-011 | Typosquatting / non-official installs | near-miss package names (Damerau-Levenshtein ≤ 2 vs 40 popular packages), direct-URL/git installs, `--registry` / `--index-url` overrides | high |
+| SS-012 | Cloud instance-metadata probing | `169.254.169.254`, `metadata.google.internal`, ECS/Azure/Alibaba endpoints, IMDS paths, IMDSv2 token headers | critical |
+| SS-013 | Startup persistence installation | writes to `.bashrc`/`.zshrc`/`.profile`/`authorized_keys`, cron `@reboot`, systemd user units, LaunchAgents, autostart | high |
+| SS-014 | Agent config poisoning propagation | payload appends to *other* skills, self-copy across skill dirs, MCP config rewrites in agent/runtime voice | critical |
 
 Each rule documents its OWASP mapping inline in [packages/skillsentry/src/rules/](packages/skillsentry/src/rules) — every finding carries `standards: StandardRef[]` pointing at the official framework entry, so reports are readable by humans *and* by governance tooling.
 
@@ -218,7 +221,7 @@ And gate skill updates — a scheduled workflow that fails when an installed ski
 
 ```
 packages/skillsentry/     core engine + CLI (TypeScript, zero deps, vitest)
-  src/rules/              SS-001…SS-011 static rules
+  src/rules/              SS-001…SS-014 static rules
   src/suppress.ts         inline suppressions (rule ids + mandatory reason)
   src/ai.ts               open-weight semantic layer (Ollama / OpenAI-compatible)
   src/scanner.ts          discovery, parsing, orchestration, scoring
@@ -245,7 +248,7 @@ apps/dashboard/           local Next.js UI around the same engine
 
 ## Provenance
 
-SkillSentry is an original project, written from scratch in October 2026 for Hacktoberfest and the DEV Challenge S4 ("build with open-source AI"). It has **no fork parent**: `git log` starts at the initial commit, and the only external references are published standards (OWASP LLM Top 10 2026, the agentskills.io skill spec, OWASP MCP guidance), which the rules cite — never copy. The demo GIF is captured by a committed Playwright script against the repo's own dashboard; every asset in this README is regenerable from source. A full write-up — the laziest way to keep your AI agents' skills honest, the 11 rules and the rug-pull threat model — lives on DEV: [SkillSentry on DEV](https://dev.to/ulk0r0/skillsentry-the-laziest-way-to-keep-your-ai-agents-skills-honest-253m).
+SkillSentry is an original project, written from scratch in October 2026 for Hacktoberfest and the DEV Challenge S4 ("build with open-source AI"). It has **no fork parent**: `git log` starts at the initial commit, and the only external references are published standards (OWASP LLM Top 10 2026, the agentskills.io skill spec, OWASP MCP guidance), which the rules cite — never copy. The demo GIF is captured by a committed Playwright script against the repo's own dashboard; every asset in this README is regenerable from source. A full write-up — the laziest way to keep your AI agents' skills honest, the original 11 rules and the rug-pull threat model — lives on DEV: [SkillSentry on DEV](https://dev.to/ulk0r0/skillsentry-the-laziest-way-to-keep-your-ai-agents-skills-honest-253m).
 
 ## Threat model notes
 

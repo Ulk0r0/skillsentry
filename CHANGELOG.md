@@ -5,6 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-10-24
+
+Cloud-escape & persistence release: three rules close the gap between
+"data leaves the machine" and "the machine itself is reconfigured".
+11 → 14 rules; tests 143 → 156.
+
+### Added
+- **SS-012 — Cloud instance-metadata probing** (`critical`). Link-local
+  metadata addresses (169.254.169.254, 169.254.170.2, fd00:ec2::254,
+  100.100.100.200, 168.63.129.16), GCP metadata hostnames, IMDS paths and
+  IMDSv2 token headers in agent-readable text or MCP command lines — the
+  network-internal start of the cloud credential-theft kill chain.
+- **SS-013 — Startup persistence installation** (`high`). Writes to shell
+  startup files, `authorized_keys`, cron (`@reboot`, `cron.d`), systemd user
+  units, LaunchAgents plists and XDG autostart entries. Read-only mentions
+  of those paths stay clean — write/activation context is required, so
+  ordinary dotfile documentation does not trip the rule.
+- **SS-014 — Agent config poisoning propagation** (`critical`). The
+  self-replication signature of agent worms: appending payload blocks to
+  *other* installed skills, self-copying across skill directories, and
+  MCP-config rewrites issued in agent/runtime voice. Human install
+  documentation ("copy this folder to your skills directory") stays clean.
+- **Samples gallery restored**: 8 SKILL.md fixtures (2 clean, 6 poisoned,
+  one per major rule family) backing the `scanPaths` suite and the
+  dashboard gallery.
+
 ## [0.5.0] — 2026-10-23
 
 Ship-it-to-CI release: an official GitHub Action, stdin mode, and three
