@@ -1,7 +1,7 @@
 name: 'SkillSentry'
 description: >
   Local-first security scan for AI agent skills (SKILL.md) and MCP server
-  configs. 11 static rules mapped to OWASP LLM/AST10/MCP Top 10, optional
+  configs. 14 static rules mapped to OWASP LLM/AST10/MCP Top 10, optional
   open-weight model review. Fails the job when findings reach the threshold.
 
 branding:
