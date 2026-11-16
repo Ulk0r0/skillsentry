@@ -1,7 +1,7 @@
 {
-  "name": "skillsentry",
-  "version": "0.6.1",
-  "description": "Local-first security scanner for AI agent skills (SKILL.md) and MCP server configs. Static rules + open-weight model analysis, zero runtime dependencies.",
+  "name": "@ulkoro/skillsentry",
+  "version": "0.6.3",
+  "description": "Local-first security scanner for AI agent skills (SKILL.md), MCP server configs and agent instruction files (AGENTS.md, CLAUDE.md, .cursorrules). Static rules + open-weight model analysis, zero runtime dependencies.",
   "type": "module",
   "license": "MIT",
   "author": "SkillSentry contributors",
@@ -10,7 +10,7 @@
     "url": "git+https://github.com/Ulk0r0/skillsentry.git"
   },
   "bugs": "https://github.com/Ulk0r0/skillsentry/issues",
-  "homepage": "https://github.com/Ulk0r0/skillsentry#readme",
+  "homepage": "https://intothe.tech",
   "keywords": [
     "mcp",
     "security",
@@ -24,7 +24,11 @@
     "ollama",
     "open-weight",
     "scanner",
-    "static-analysis"
+    "static-analysis",
+    "agents-md",
+    "claude-md",
+    "cursor-rules",
+    "copilot-instructions"
   ],
   "bin": {
     "skillsentry": "dist/cli.js"

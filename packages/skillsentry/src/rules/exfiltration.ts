@@ -64,7 +64,7 @@ export const exfiltration: Rule = {
   severity: 'high',
   score: 7.5,
   standards: [AST.covertDataFlow(), LLM.sensitiveInfo()],
-  appliesTo: ['skill-md', 'mcp-config'],
+  appliesTo: ['skill-md', 'mcp-config', 'agent-instructions'],
   run(surface) {
     const out: Array<{ evidence: string; note?: string; severity?: 'critical' | 'high' | 'low' | 'medium'; score?: number }> = [];
     const seen = new Set<string>();

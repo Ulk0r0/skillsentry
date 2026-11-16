@@ -13,6 +13,7 @@ import type {
 import { severityRank } from './types.js';
 import { parseSkillMd, isSkillMdFile } from './parser/skill-md.js';
 import { parseMcpConfig, isMcpConfigFile } from './parser/mcp-config.js';
+import { parseAgentInstructions, isInstructionFile } from './parser/agent-instructions.js';
 import { rulesFor } from './rules/index.js';
 import { applySuppressions } from './suppress.js';
 import { assessWithAi, probeAi, DEFAULT_AI_BASE_URL, DEFAULT_MODEL } from './ai.js';
@@ -46,7 +47,7 @@ async function collectFiles(inputs: string[], skipped: string[], log?: (m: strin
       if (isCandidate(input)) files.add(path.resolve(input));
       else {
         skipped.push(input);
-        log?.(`skipped (not a SKILL.md / MCP config candidate): ${input}`);
+        log?.(`skipped (not a SKILL.md / MCP config / agent-instructions candidate): ${input}`);
       }
     } else if (st.isDirectory()) {
       await walk(input, files, 0);
@@ -75,7 +76,7 @@ async function walk(dir: string, out: Set<string>, depth: number): Promise<void>
 }
 
 function isCandidate(fileName: string): boolean {
-  return isSkillMdFile(fileName) || isMcpConfigFile(fileName);
+  return isSkillMdFile(fileName) || isMcpConfigFile(fileName) || isInstructionFile(fileName);
 }
 
 // -------------------------------------------------------------- parsing ----
@@ -84,6 +85,7 @@ export function parseTarget(filePath: string, raw: string): ScanTarget {
   const base = path.basename(filePath);
   if (isSkillMdFile(base)) return parseSkillMd(filePath, raw);
   if (isMcpConfigFile(base)) return parseMcpConfig(filePath, raw);
+  if (isInstructionFile(base)) return parseAgentInstructions(filePath, raw);
   // Unknown extension: treat as skill markdown (best effort, never throws).
   return parseSkillMd(filePath, raw);
 }

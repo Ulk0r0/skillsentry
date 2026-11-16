@@ -5,6 +5,44 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] — 2026-11-16
+
+Instruction files stop being a blind spot. Discovery now picks up
+`AGENTS.md`, `CLAUDE.md`, `.cursorrules` and
+`.github/copilot-instructions.md` as first-class scan candidates — direct
+path arguments, directory walks and CI runs all route them through the
+same rulebook, so the `--stdin`-only workaround from the AGENTS.md
+dissection is no longer needed.
+
+### Added
+- **New target kind `agent-instructions`** with its own parser
+  (`src/parser/agent-instructions.ts`). Reports and JSON output label
+  these files honestly instead of pretending they are skills or MCP
+  configs.
+- **12 of the 14 static rules apply** to instruction files (SS-008 stays
+  MCP-config-only, SS-009 skill-frontmatter-only). The poisoned
+  AGENTS.md specimen from the intothe.tech trilogy reproduces exactly:
+  dangerous, 74/100, four findings — SS-010 critical (9.5), SS-001 high
+  (8.5), SS-002 high ×2 (7.5).
+- **`skillsentry diff` covers instruction files** — an AGENTS.md that
+  was clean on merge day and a floater by Friday trips the rug-pull
+  check.
+- The npm package's LICENSE and README now live in the repo
+  (`packages/skillsentry/`), and the workspace tracks `bun.lock`.
+
+### Tests
+162 → 169 (discovery, kind routing, the 74/100 specimen reproduced,
+clean-file regression). Same 14 rules, same deterministic engine, zero
+runtime dependencies — nothing leaves the machine.
+
+## [0.6.2] — 2026-11-04
+
+Docs-only release, published to npm together with 0.6.1 (`dist` is
+byte-identical to 0.6.1): the npm README now points every rule at the
+plain-language rulebook on intothe.tech/rules, deep-linkable as
+`https://intothe.tech/rules#SS-010`, so a finding can be shared as a
+link instead of a paragraph.
+
 ## [0.6.1] — 2026-10-27
 
 Precision release, forged against a real agent-first site (a clean,

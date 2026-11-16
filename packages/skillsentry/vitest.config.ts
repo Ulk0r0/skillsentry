@@ -1,6 +1,11 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // This package can be checked out nested inside another project whose root
+  // carries a PostCSS config (e.g. a Next.js site). Vite's postcss loader
+  // walks up and chokes on it — disable stylesheet handling entirely; a
+  // static-analysis CLI has no CSS to transform.
+  css: { postcss: { plugins: [] } },
   test: {
     include: ['test/**/*.test.ts'],
     environment: 'node',

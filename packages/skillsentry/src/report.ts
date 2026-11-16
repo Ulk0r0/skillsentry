@@ -23,7 +23,7 @@ export function exitCodeFor(result: ScanResult, failOn: Severity = 'high'): numb
 export function renderTerminal(result: ScanResult): string {
   const L: string[] = [];
   L.push('');
-  L.push(ansi.bold('  SkillSentry') + ansi.dim(' — local-first security scan for agent skills & MCP configs'));
+  L.push(ansi.bold('  SkillSentry') + ansi.dim(' — local-first security scan for agent skills, MCP configs & instruction files'));
   L.push('');
 
   for (const r of result.reports) {

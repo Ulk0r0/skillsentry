@@ -32,7 +32,7 @@ export const crossToolShadowing: Rule = {
   severity: 'high',
   score: 8,
   standards: [AST.toolShadowing(), MCP.toolPoisoning(), LLM.promptInjection()],
-  appliesTo: ['skill-md', 'mcp-config'],
+  appliesTo: ['skill-md', 'mcp-config', 'agent-instructions'],
   run(surface) {
     const out: Array<{ evidence: string; note?: string; severity?: 'high' | 'critical' | 'medium'; score?: number }> = [];
     const seen = new Set<string>();

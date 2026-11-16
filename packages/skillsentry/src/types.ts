@@ -29,7 +29,7 @@ export interface StandardRef {
   url?: string;
 }
 
-export type TargetKind = 'skill-md' | 'mcp-config';
+export type TargetKind = 'skill-md' | 'mcp-config' | 'agent-instructions';
 
 export interface ScanTarget {
   /** Absolute or CLI-given path of the scanned file. */

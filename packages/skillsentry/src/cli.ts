@@ -5,7 +5,7 @@
  *   skillsentry [paths...] [options]
  *
  * Examples:
- *   skillsentry .                          scan cwd for SKILL.md + MCP configs
+ *   skillsentry .                          scan cwd for SKILL.md + MCP configs + instruction files
  *   skillsentry skills/ --json             JSON output (pipe-friendly)
  *   skillsentry . --fail-on high           exit 1 when high+ findings exist (CI)
  *   skillsentry . --no-ai                  static rules only
@@ -56,8 +56,9 @@ const VERSION = (() => {
   }
 })();
 
-const USAGE = `SkillSentry v${VERSION} — local-first security scanner for AI agent skills (SKILL.md)
-and MCP server configs. Static rules + open-weight model review, zero dependencies.
+const USAGE = `SkillSentry v${VERSION} — local-first security scanner for AI agent skills (SKILL.md),
+MCP server configs and agent instruction files (AGENTS.md, CLAUDE.md, .cursorrules,
+copilot-instructions.md). Static rules + open-weight model review, zero dependencies.
 
 USAGE
   skillsentry [paths...] [options]
@@ -350,7 +351,7 @@ async function main(): Promise<void> {
       fail(`stdin payload exceeds the ${MAX_FILE_BYTES}-byte cap — scan a file instead`);
     }
     if (raw.trim().length === 0) {
-      fail('stdin was empty — nothing to scan (pipe a SKILL.md or MCP config)');
+      fail('stdin was empty — nothing to scan (pipe a SKILL.md, MCP config or instruction file)');
     }
     const report = await scanText(stdinTargetPath(raw), raw, {
       ai: args.ai,
@@ -387,7 +388,7 @@ async function main(): Promise<void> {
   if (result.filesScanned === 0) {
     // A scanner that reports success while scanning nothing is a CI footgun:
     // a typo'd path would turn every workflow green with zero coverage.
-    process.stderr.write('skillsentry: nothing was scanned — every input path was missing, unreadable or not a SKILL.md/MCP config candidate. Refusing to pass a scan of nothing.\n');
+    process.stderr.write('skillsentry: nothing was scanned — every input path was missing, unreadable or not a SKILL.md/MCP-config/instruction-file candidate. Refusing to pass a scan of nothing.\n');
     process.exitCode = 2;
   } else {
     process.exitCode = exitCodeFor(result, args.failOn);

@@ -42,7 +42,7 @@ export const persistence: Rule = {
   severity: 'high',
   score: 8,
   standards: [AST.poisoning(), LLM.excessiveAgency()],
-  appliesTo: ['skill-md', 'mcp-config'],
+  appliesTo: ['skill-md', 'mcp-config', 'agent-instructions'],
   run(surface) {
     const out: Array<{ evidence: string; note?: string; severity?: 'critical' | 'high' | 'medium'; score?: number }> = [];
     const seen = new Set<string>();

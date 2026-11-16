@@ -50,7 +50,7 @@ export const configPropagation: Rule = {
   severity: 'critical',
   score: 9,
   standards: [AST.poisoning(), MCP.toolPoisoning(), LLM.dataPoisoning()],
-  appliesTo: ['skill-md', 'mcp-config'],
+  appliesTo: ['skill-md', 'mcp-config', 'agent-instructions'],
   run(surface) {
     const out: Array<{ evidence: string; note?: string; severity?: 'critical' | 'high'; score?: number }> = [];
     const seen = new Set<string>();

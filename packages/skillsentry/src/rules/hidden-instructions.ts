@@ -30,7 +30,7 @@ export const hiddenInstructions: Rule = {
   severity: 'critical',
   score: 9,
   standards: [AST.poisoning(), MCP.toolPoisoning(), LLM.promptInjection()],
-  appliesTo: ['skill-md', 'mcp-config'],
+  appliesTo: ['skill-md', 'mcp-config', 'agent-instructions'],
   run(surface) {
     const out = [] as Array<{ evidence: string; note?: string; severity?: 'critical' | 'high'; score?: number }>;
     for (const p of PATTERNS) {

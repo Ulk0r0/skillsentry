@@ -1,4 +1,4 @@
-import type { ScanSurface, ScanTarget, Severity, StandardRef } from '../types.js';
+import type { ScanSurface, ScanTarget, Severity, StandardRef, TargetKind } from '../types.js';
 
 /**
  * A static rule evaluates one `ScanSurface` and returns raw matches that the
@@ -15,7 +15,7 @@ export interface Rule {
   score: number;
   standards: StandardRef[];
   /** Target kinds this rule applies to. */
-  appliesTo: Array<'skill-md' | 'mcp-config'>;
+  appliesTo: TargetKind[];
   run(surface: ScanSurface, target: ScanTarget): RawMatch[];
 }
 

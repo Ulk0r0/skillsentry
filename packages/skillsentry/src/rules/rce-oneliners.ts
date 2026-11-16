@@ -53,7 +53,7 @@ export const rceOneliners: Rule = {
   severity: 'critical',
   score: 9.5,
   standards: [AST.poisoning(), LLM.excessiveAgency(), MCP.insecureConfig()],
-  appliesTo: ['skill-md', 'mcp-config'],
+  appliesTo: ['skill-md', 'mcp-config', 'agent-instructions'],
   run(surface) {
     const out: Array<{ evidence: string; note?: string; severity?: 'critical'; score?: number }> = [];
     const seen = new Set<string>();

@@ -16,7 +16,7 @@ Agents read text to decide what to do: `SKILL.md` files, tool descriptions, MCP 
 
 SkillSentry is a scanner that treats agent-readable text as an attack surface:
 
-- **14 deterministic static rules** (SS-001…SS-014) for the known poisoning patterns — hidden `<IMPORTANT>` directives, exfiltration endpoints, credential paths, destructive commands, base64-smuggled payloads, tool shadowing, surveillance behavior, insecure MCP configs, deceptive metadata, remote-code-execution one-liners, typosquatted installs, cloud-metadata credential theft, startup persistence, and self-propagating config edits.
+- **14 deterministic static rules** (SS-001…SS-014) for the known poisoning patterns — hidden `<IMPORTANT>` directives, exfiltration endpoints, credential paths, destructive commands, base64-smuggled payloads, tool shadowing, surveillance behavior, insecure MCP configs, deceptive metadata, remote-code-execution one-liners, typosquatted installs, cloud-metadata credential theft, startup persistence, and self-propagating config edits. **Every rule is documented in plain language at [the intothe.tech Rulebook](https://intothe.tech/rules)** — deep-link a single finding as `https://intothe.tech/rules#SS-010`.
 - **An open-weight semantic layer**: a local model (Ollama with Gemma by default, or any OpenAI-compatible runtime — llama.cpp, LM Studio, vLLM) reviews the *intent* of the text and catches what regexes miss. If no local runtime is running, the scan degrades gracefully to static-only. **Nothing ever leaves your machine.**
 - **Every finding is mapped** to [OWASP LLM Top 10 (2026)](https://genai.owasp.org/Top-10-2026/), [OWASP Agentic Skills Top 10](https://github.com/OWASP/www-project-agentic-skills-top-10) and the [OWASP MCP Top 10](https://github.com/OWASP-MCP-Governance-and-Risk-Project/docs), with severity, evidence and remediation.
 - **Zero runtime dependencies.** A security tool that ships 500 transitive deps would be ironic. SkillSentry ships none.
@@ -43,29 +43,29 @@ If no local model is available, SkillSentry still scans — static rules carry t
 
 ```bash
 # scan the current project (finds SKILL.md files and MCP configs automatically)
-npx skillsentry .
+npx @ulkoro/skillsentry .
 
 # strict JSON for CI, failing on high+ findings
-npx skillsentry . --json --fail-on high
+npx @ulkoro/skillsentry . --json --fail-on high
 
 # static-only, fully offline
-npx skillsentry . --no-ai
+npx @ulkoro/skillsentry . --no-ai
 
 # pick your local open-weight model (any OpenAI-compatible runtime)
-npx skillsentry . --model llama3.2:3b
+npx @ulkoro/skillsentry . --model llama3.2:3b
 
 # rug-pull check: did an updated skill turn poisonous since the backup?
-npx skillsentry diff ~/skills-backup/ ~/.claude/skills/ --fail-on high
+npx @ulkoro/skillsentry diff ~/skills-backup/ ~/.claude/skills/ --fail-on high
 
 # scan one piped document (git hooks, ad-hoc checks)
-cat SKILL.md | npx skillsentry --stdin --fail-on high
+cat SKILL.md | npx @ulkoro/skillsentry --stdin --fail-on high
 
 # stdin also takes MCP configs: JSON with an `mcpServers` key is routed to
 # the structured parser, so the full mcp-config rule set applies
-cat claude_desktop_config.json | npx skillsentry --stdin --fail-on high
+cat claude_desktop_config.json | npx @ulkoro/skillsentry --stdin --fail-on high
 
 # SARIF 2.1.0 for GitHub Code Scanning
-npx skillsentry . --sarif > skillsentry.sarif
+npx @ulkoro/skillsentry . --sarif > skillsentry.sarif
 ```
 
 Or clone and run from source:
@@ -155,7 +155,7 @@ Static rules catch known shapes. The AI layer catches *intent*: a tool descripti
 
 ```bash
 ollama pull gemma3:4b
-npx skillsentry .            # AI layer engages automatically when Ollama answers
+npx @ulkoro/skillsentry .            # AI layer engages automatically when Ollama answers
 ```
 
 ## Dashboard
@@ -199,7 +199,7 @@ tab:
 
 ```yaml
 - name: Scan agent skills
-  run: npx skillsentry . --json --fail-on high
+  run: npx @ulkoro/skillsentry . --json --fail-on high
 ```
 
 Exit codes: `0` clean under threshold, `1` findings at/above `--fail-on`, `2` usage error — or a scan of *nothing* (every input path missing or not a candidate; a typo'd CI path can never pass silently). Default threshold: `high`.
@@ -208,7 +208,7 @@ Upload findings to GitHub's Security tab with SARIF — this is exactly what Ski
 
 ```yaml
 - name: Scan agent skills (SARIF)
-  run: npx skillsentry . --sarif --no-ai > skillsentry.sarif
+  run: npx @ulkoro/skillsentry . --sarif --no-ai > skillsentry.sarif
 - uses: github/codeql-action/upload-sarif@v3
   with:
     sarif_file: skillsentry.sarif
@@ -218,7 +218,7 @@ And gate skill updates — a scheduled workflow that fails when an installed ski
 
 ```yaml
 - name: Rug-pull watch
-  run: npx skillsentry diff "$RUNNER_TEMP/skills-baseline/" "$HOME/.claude/skills/" --fail-on high
+  run: npx @ulkoro/skillsentry diff "$RUNNER_TEMP/skills-baseline/" "$HOME/.claude/skills/" --fail-on high
 ```
 
 ## Project layout

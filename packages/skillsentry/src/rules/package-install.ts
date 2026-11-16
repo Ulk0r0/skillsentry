@@ -123,7 +123,7 @@ export const packageInstall: Rule = {
   severity: 'high',
   score: 8,
   standards: [LLM.supplyChain(), AST.poisoning(), MCP.insecureConfig()],
-  appliesTo: ['skill-md', 'mcp-config'],
+  appliesTo: ['skill-md', 'mcp-config', 'agent-instructions'],
   run(surface) {
     const out: Array<{ evidence: string; note?: string; severity?: 'high' | 'medium'; score?: number }> = [];
     const seen = new Set<string>();

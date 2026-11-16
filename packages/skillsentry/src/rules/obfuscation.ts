@@ -44,7 +44,7 @@ export const obfuscation: Rule = {
   severity: 'critical',
   score: 9,
   standards: [AST.poisoning(), MCP.toolPoisoning(), LLM.promptInjection()],
-  appliesTo: ['skill-md', 'mcp-config'],
+  appliesTo: ['skill-md', 'mcp-config', 'agent-instructions'],
   run(surface) {
     const out: Array<{ evidence: string; note?: string; severity?: 'critical' | 'high' | 'medium'; score?: number }> = [];
     const text = surface.text;
